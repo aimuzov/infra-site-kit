@@ -94,3 +94,10 @@ test('the field label focuses its input', async ({ page }) => {
 	await page.getByText('Токен', { exact: true }).click()
 	await expect(page.locator('#token')).toBeFocused()
 })
+
+test('the skeleton takes its size in the browser, not from a style attribute', async ({ page }) => {
+	const skeleton = page.locator('.skeleton').first()
+	const fontSize = await skeleton.evaluate((node) => parseFloat(getComputedStyle(document.documentElement).fontSize))
+
+	await expect.poll(async () => (await skeleton.boundingBox())?.width).toBeCloseTo(12 * fontSize, 0)
+})

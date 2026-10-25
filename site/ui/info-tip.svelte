@@ -44,7 +44,14 @@
 	>
 		<CircleHelp size={14} />
 	</button>
-	<span bind:this={bubble} {id} role="tooltip" class="tip__bubble" style:translate={`${shift}px 0`}>{text}</span>
+	<!-- Без сдвига undefined: на сборке атрибута style нет, CSP нечего резать. -->
+	<span
+		bind:this={bubble}
+		{id}
+		role="tooltip"
+		class="tip__bubble"
+		style:translate={shift ? `${shift}px 0` : undefined}>{text}</span
+	>
 </span>
 
 <style>
