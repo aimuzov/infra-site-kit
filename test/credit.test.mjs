@@ -19,7 +19,7 @@ test('syncYear puts the current year into every data-year element', () => {
 test('the credit takes its colours and spacing from variables with the old look as defaults', () => {
 	const source = readFileSync(join(import.meta.dirname, '..', 'site', 'credit.svelte'), 'utf8')
 
-	for (const variable of ['--credit-color', '--credit-hover', '--credit-gap', '--credit-decoration']) {
+	for (const variable of ['--credit-color', '--credit-hover', '--credit-gap']) {
 		assert.match(source, new RegExp(`var\\(${variable}, `), variable)
 	}
 

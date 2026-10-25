@@ -57,7 +57,7 @@
 <style>
 	/*
 	 * Снаружи подпись настраивается переменными, умолчания повторяют прежний вид:
-	 * --credit-color, --credit-hover, --credit-gap, --credit-decoration
+	 * --credit-color, --credit-hover, --credit-gap
 	 * и пара цветов расслоения --credit-glitch-a и --credit-glitch-b.
 	 */
 	.credit {
@@ -97,7 +97,6 @@
 
 		&__link {
 			color: inherit;
-			text-decoration: var(--credit-decoration, underline);
 			text-underline-offset: 0.2em;
 
 			&:hover {

@@ -139,10 +139,9 @@ With a mouse only the face peeks out at first, and the line slides up from below
 | `--credit-color`                         | `inherit`           | text and icons                                  |
 | `--credit-hover`                         | `inherit`           | links on hover                                  |
 | `--credit-gap`                           | `0.25em 0.9em`      | between the author part and the source link     |
-| `--credit-decoration`                    | `underline`         | links, e.g. `none`                              |
 | `--credit-glitch-a`, `--credit-glitch-b` | red and cyan at 70% | the two copies the icons split into on a glitch |
 
-`class` lands on the root element, so a site can also place the credit with its own rules.
+Links follow the site's own rules for `a`, underline included. `class` lands on the root element, so a site can also place the credit with its own rules.
 
 ## Theme
 
