@@ -241,7 +241,7 @@ test('the copy leaves the page once the circle has shrunk to nothing', () => {
 
 	const [peek] = peeks()
 
-	page.listeners.transitionend({ target: peek, propertyName: '--peek-r' })
+	page.listeners.transitionend({ target: peek, propertyName: 'clip-path' })
 	assert.equal(peeks().length, 0)
 
 	cleanup()
