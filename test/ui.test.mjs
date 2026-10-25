@@ -13,6 +13,7 @@ import Card from '../site/ui/card.svelte'
 import CopyValue from '../site/ui/copy-value.svelte'
 import Dropzone from '../site/ui/dropzone.svelte'
 import Field from '../site/ui/field.svelte'
+import InfoTip from '../site/ui/info-tip.svelte'
 import Input from '../site/ui/input.svelte'
 import Skeleton from '../site/ui/skeleton.svelte'
 import { formatSize, matchesAccept, rejectFile } from '../site/ui/files.js'
@@ -80,10 +81,14 @@ test('input, badge, alert and skeleton render their modifiers', () => {
 	)
 	assert.match(html(Badge, { mono: true, children: text('№ 12') }), /badge badge--mono/)
 	assert.match(html(Alert, { variant: 'danger', title: 'Ошибка', children: text('x') }), /role="alert"/)
-	assert.match(
-		html(Skeleton, { width: '7rem', round: true }),
-		/skeleton skeleton--round[^"]*"[^>]*style="width: 7rem/,
-	)
+	assert.match(html(Skeleton, { width: '7rem', round: true }), /class="skeleton skeleton--round/)
+})
+
+// Статичный HTML с атрибутом style строгая CSP режет.
+// Размеры и сдвиги компоненты ставят в браузере через el.style.
+test('skeleton and info-tip render no style attribute', () => {
+	assert.doesNotMatch(html(Skeleton, { width: '7rem', height: '2rem', round: true }), /style=/)
+	assert.doesNotMatch(html(InfoTip, { text: 'Пояснение' }), /style=/)
 })
 
 test('copy-value voices the label and the value', () => {
