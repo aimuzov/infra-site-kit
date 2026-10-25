@@ -96,6 +96,23 @@ createServer((request, response) => {
 		return
 	}
 
+	// Стенд компонентов `ui/`, собранный Vite перед прогоном (`npm run test:e2e`).
+	if (pathname.startsWith('/ui/')) {
+		const file = pathname === '/ui/' ? 'index.html' : pathname.slice('/ui/'.length)
+
+		try {
+			const body = readFileSync(join(root, 'test/ui/dist', file))
+
+			response
+				.writeHead(200, { 'content-type': types[file.slice(file.lastIndexOf('.'))] ?? 'text/html' })
+				.end(body)
+
+			return
+		} catch {
+			// Стенд не собран или файла нет, проваливаемся в 404 ниже.
+		}
+	}
+
 	const type = types[pathname.slice(pathname.lastIndexOf('.'))]
 
 	if (pathname.startsWith('/site/') && type) {

@@ -30,6 +30,7 @@ Shared CI, linter and e2e configs for the aimuzov sites built from [infra-site-t
 - [**Theme**](#theme): the theme switch logic and the script that applies the choice before the first paint.
 - [**Theme peek**](#theme-peek): a theme button that shows the other scheme in a circle around itself.
 - [**Base styles**](#base-styles): the root defaults, a steady scrollbar gutter and no tap highlight.
+- [**UI parts**](#ui-parts): Svelte buttons, cards, fields, alerts and a file dropzone on tokens a site maps to its palette.
 - [**Yandex Metrika**](#yandex-metrika) that loads after the first interaction and brings its own CSP sources.
 - [**Not-found page**](#not-found-page) with the author's face and suggestions from the sitemap.
 - [**Reader changelog**](#reader-changelog): the "Что нового" page, its format and the release PR check.
@@ -204,6 +205,34 @@ import '@aimuzov/infra-site-kit/base.css'
 ```
 
 The site imports it once, in the base layout. A new shared root rule lands here, so a site picks it up with the kit update alone.
+
+## UI parts
+
+Svelte parts that several sites drew each on their own, now in one place: `button`, `chip-button`, `card`, `badge`, `alert`, `field`, `input`, `skeleton`, `copy-value`, `info-tip` and `dropzone`. Icons are [Lucide](https://lucide.dev) through `@lucide/svelte`, an optional peer the site installs itself.
+
+The parts read only `--ui-*` tokens. `ui/tokens.css` gives them defaults, and the site maps them to its own palette in `global.css`. The prefix is there because sites name the same thing differently: `--muted` is a text colour in one and a background in another.
+
+```astro
+---
+import '@aimuzov/infra-site-kit/ui/tokens.css'
+import '../styles/global.css' /* :root { --ui-bg: var(--bg); --ui-primary: var(--brand); ... } */
+---
+```
+
+```svelte
+<script>
+	import Card from '@aimuzov/infra-site-kit/ui/card.svelte'
+	import Dropzone from '@aimuzov/infra-site-kit/ui/dropzone.svelte'
+</script>
+
+<Card title="Upload">
+	<Dropzone accept=".zip,.xml" maxSize={20 * 1024 * 1024} onfile={(file) => upload(file)} />
+</Card>
+```
+
+The dropzone takes a file by drag and drop, by click and from the keyboard, checks its type against `accept` (dragging skips the dialog filter) and its size against `maxSize`, and says why a file did not fit. Its `pick()` opens the same dialog from a button elsewhere, for "Replace" next to a result. `ui/files.js` holds that check for the site's own use.
+
+The styles are plain CSS nesting with full class names, so the parts need no PostCSS plugins of the site. The props are typed in `*.svelte.d.ts`.
 
 ## Yandex Metrika
 
