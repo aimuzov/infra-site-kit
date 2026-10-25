@@ -53,6 +53,26 @@ export function formatSize(bytes) {
 }
 
 /**
+ * Открывает системный диалог выбора файла и отдаёт выбранный, или `null`, если окно закрыли.
+ * Поле создаётся на время вызова, поэтому кнопка «Заменить» работает и тогда, когда
+ * дропзоны на странице уже нет.
+ *
+ * @param {string} [accept]
+ * @returns {Promise<File | null>}
+ */
+export function pickFile(accept = '') {
+	return new Promise((resolve) => {
+		const input = document.createElement('input')
+
+		input.type = 'file'
+		input.accept = accept
+		input.addEventListener('change', () => resolve(input.files?.[0] ?? null), { once: true })
+		input.addEventListener('cancel', () => resolve(null), { once: true })
+		input.click()
+	})
+}
+
+/**
  * Почему файл не подходит, или `null`, если подходит.
  *
  * @param {{ name: string, type: string, size: number }} file

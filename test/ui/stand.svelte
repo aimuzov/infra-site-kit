@@ -9,6 +9,7 @@
 	import Field from '../../site/ui/field.svelte'
 	import Input from '../../site/ui/input.svelte'
 	import Skeleton from '../../site/ui/skeleton.svelte'
+	import { pickFile } from '../../site/ui/files.js'
 
 	let taken = $state('')
 	let value = $state('')
@@ -22,6 +23,7 @@
 		{#snippet action()}<ChipButton onclick={() => zone.pick()}>Заменить</ChipButton>{/snippet}
 		<Dropzone bind:this={zone} accept=".json,application/json" maxSize={1024} note="result.json" onfile={(file) => (taken = file.name)} />
 		<p data-taken>{taken}</p>
+		<ChipButton onclick={async () => (taken = (await pickFile('.json'))?.name ?? 'cancelled')}>Выбрать вне зоны</ChipButton>
 	</Card>
 	<Card title="Данные" tone="danger">
 		<Field label="Токен" for="token" hint="Из настроек профиля" missing={!value}>

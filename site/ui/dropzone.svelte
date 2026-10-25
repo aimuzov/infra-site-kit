@@ -45,7 +45,10 @@
 	const shown = $derived(error ?? rejected)
 	const id = $props.id()
 
-	/** Открывает диалог выбора: им пользуется и кнопка «Заменить» рядом с итогом. */
+	/**
+	 * Открывает диалог выбора из кнопки рядом с зоной. Если зону к этому времени убрали
+	 * со страницы, кнопка зовёт `pickFile` из `files.js`.
+	 */
 	export function pick() {
 		if (!disabled) picker.click()
 	}

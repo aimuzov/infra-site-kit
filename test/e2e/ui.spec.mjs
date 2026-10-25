@@ -57,6 +57,17 @@ test('the zone opens the file dialog from the keyboard and from the chip outside
 	expect(again).toBeTruthy()
 })
 
+test('pickFile opens the dialog without a zone on the page', async ({ page }) => {
+	const [chooser] = await Promise.all([
+		page.waitForEvent('filechooser'),
+		page.getByRole('button', { name: 'Выбрать вне зоны' }).click(),
+	])
+
+	expect(await chooser.element().getAttribute('accept')).toBe('.json')
+	await chooser.setFiles({ name: 'outside.json', mimeType: 'application/json', buffer: Buffer.from('{}') })
+	await expect(page.locator('[data-taken]')).toHaveText('outside.json')
+})
+
 test('a disabled zone takes neither focus nor files', async ({ page }) => {
 	const disabled = page.locator('.dropzone--disabled')
 
