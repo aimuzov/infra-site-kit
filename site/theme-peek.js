@@ -15,6 +15,8 @@ const NEAR = 60
 const FAINT = 0.35
 /** Доля экрана, которую закрывает раскрытый круг. */
 const COVER = 0.33
+/** На сколько раскрытый круг вырастает на вдохе. */
+const PULSE = 1.05
 
 /**
  * Что кадр читает со страницы до того как что-то в неё пишет: центры кнопок и их целевые
@@ -315,19 +317,56 @@ export function themePeek(
 		peek.style.setProperty('--peek-r', `${r}px`)
 		peek.style.opacity = String(opacity)
 		peek.classList.toggle('theme-peek--open', entry.hovered && r > 0)
+		aim(entry.hovered && r > 0 ? { x: spot.x + scrollX, y: spot.y + scrollY, r } : undefined)
+	}
+
+	/**
+	 * Раскрытый круг дышит. Дыхание -- анимация clip-path с готовыми пикселями, её Chrome
+	 * отдаёт композитору. Но только если по clip-path больше ничего не идёт, иначе она
+	 * до конца остаётся на основном потоке и перерисовывает копию каждый кадр. Поэтому
+	 * вдох начинается не по таймеру, а когда закончилось раскрытие.
+	 * @type {{ x: number, y: number, r: number } | undefined}
+	 */
+	let breath
+	/** @type {Animation | undefined} */
+	let pulse
+
+	/** @param {{ x: number, y: number, r: number } | undefined} next */
+	function aim(next) {
+		if (breath && next && breath.x === next.x && breath.y === next.y && breath.r === next.r) return
+
+		breath = next
+		pulse?.cancel()
+		pulse = undefined
+	}
+
+	function breathe() {
+		if (!breath || pulse || typeof peek?.animate !== 'function') return
+
+		const { x, y, r } = breath
+		const at = `at ${x}px ${y}px`
+
+		pulse = peek.animate([{ clipPath: `circle(${r}px ${at})` }, { clipPath: `circle(${r * PULSE}px ${at})` }], {
+			duration: 1400,
+			iterations: Infinity,
+			direction: 'alternate',
+			easing: 'ease-in-out',
+		})
 	}
 
 	/** @param {TransitionEvent} event */
 	function settle(event) {
-		if (
-			peek &&
-			event.target === peek &&
-			event.propertyName === '--peek-r' &&
-			peek.style.getPropertyValue('--peek-r') === '0px'
-		) {
-			peek.remove()
-			peek = undefined
+		if (!peek || event.target !== peek || event.propertyName !== 'clip-path') return
+
+		if (peek.style.getPropertyValue('--peek-r') !== '0px') {
+			breathe()
+
+			return
 		}
+
+		aim(undefined)
+		peek.remove()
+		peek = undefined
 	}
 
 	function onEnter() {
@@ -362,6 +401,7 @@ export function themePeek(
 		anchor.removeEventListener('pointerenter', onEnter)
 		anchor.removeEventListener('pointerleave', onLeave)
 		anchor.removeEventListener('click', onClick)
+		aim(undefined)
 		peek?.remove()
 	}
 }
