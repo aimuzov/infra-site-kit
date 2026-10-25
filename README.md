@@ -132,7 +132,17 @@ By default the credit stretches over the container: the author on the left, "И�
 
 With a mouse only the face peeks out at first, and the line slides up from below on hover or keyboard focus. Touch screens have no hover, so they show the whole line right away.
 
-`copyright={false}` drops the year when the site has its own © line. `--credit-hover` sets the link hover color; everything else is inherited from the footer.
+`copyright={false}` drops the year when the site has its own © line. The font comes from the footer, and the rest is set from outside with variables, each defaulting to the look above:
+
+| Variable                                 | Default             | What it sets                                    |
+| ---------------------------------------- | ------------------- | ----------------------------------------------- |
+| `--credit-color`                         | `inherit`           | text and icons                                  |
+| `--credit-hover`                         | `inherit`           | links on hover                                  |
+| `--credit-gap`                           | `0.25em 0.9em`      | between the author part and the source link     |
+| `--credit-decoration`                    | `underline`         | links, e.g. `none`                              |
+| `--credit-glitch-a`, `--credit-glitch-b` | red and cyan at 70% | the two copies the icons split into on a glitch |
+
+`class` lands on the root element, so a site can also place the credit with its own rules.
 
 ## Theme
 

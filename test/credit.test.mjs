@@ -16,6 +16,18 @@ test('syncYear puts the current year into every data-year element', () => {
 	)
 })
 
+test('the credit takes its colours and spacing from variables with the old look as defaults', () => {
+	const source = readFileSync(join(import.meta.dirname, '..', 'site', 'credit.svelte'), 'utf8')
+
+	for (const variable of ['--credit-color', '--credit-hover', '--credit-gap', '--credit-decoration']) {
+		assert.match(source, new RegExp(`var\\(${variable}, `), variable)
+	}
+
+	assert.match(source, /var\(--credit-glitch-a, rgb\(255 0 90 \/ 70%\)\)/)
+	assert.match(source, /var\(--credit-glitch-b, rgb\(0 210 255 \/ 70%\)\)/)
+	assert.doesNotMatch(source, /drop-shadow\(-?[\d.]+em 0 rgb\(/)
+})
+
 test('the package exports the credit files it ships', () => {
 	const pkg = JSON.parse(readFileSync(join(import.meta.dirname, '..', 'package.json'), 'utf8'))
 
