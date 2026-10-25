@@ -83,9 +83,6 @@
 		}
 
 		& .card__action {
-			display: inline-flex;
-			gap: 0.25rem;
-			align-items: center;
 			margin-left: auto;
 			font-size: 0.75rem;
 			font-weight: 500;
