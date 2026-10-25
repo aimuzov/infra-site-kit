@@ -55,15 +55,21 @@
 </span>
 
 <style>
+	/*
+	 * Снаружи подпись настраивается переменными, умолчания повторяют прежний вид:
+	 * --credit-color, --credit-hover, --credit-gap
+	 * и пара цветов расслоения --credit-glitch-a и --credit-glitch-b.
+	 */
 	.credit {
 		position: relative;
 		display: block;
 		width: 100%;
+		color: var(--credit-color, inherit);
 
 		&__line {
 			display: flex;
 			flex-wrap: wrap;
-			gap: 0.25em 0.9em;
+			gap: var(--credit-gap, 0.25em 0.9em);
 		}
 
 		&--spread &__line {
@@ -168,15 +174,18 @@
 		}
 
 		89% {
-			filter: drop-shadow(-0.12em 0 rgb(255 0 90 / 70%)) drop-shadow(0.12em 0 rgb(0 210 255 / 70%));
+			filter: drop-shadow(-0.12em 0 var(--credit-glitch-a, rgb(255 0 90 / 70%)))
+				drop-shadow(0.12em 0 var(--credit-glitch-b, rgb(0 210 255 / 70%)));
 		}
 
 		90.5% {
-			filter: drop-shadow(0.12em 0 rgb(255 0 90 / 70%)) drop-shadow(-0.12em 0 rgb(0 210 255 / 70%));
+			filter: drop-shadow(0.12em 0 var(--credit-glitch-a, rgb(255 0 90 / 70%)))
+				drop-shadow(-0.12em 0 var(--credit-glitch-b, rgb(0 210 255 / 70%)));
 		}
 
 		92% {
-			filter: drop-shadow(-0.06em 0 rgb(255 0 90 / 50%)) drop-shadow(0.06em 0 rgb(0 210 255 / 50%));
+			filter: drop-shadow(-0.06em 0 color-mix(in srgb, var(--credit-glitch-a, rgb(255 0 90 / 70%)) 70%, transparent))
+				drop-shadow(0.06em 0 color-mix(in srgb, var(--credit-glitch-b, rgb(0 210 255 / 70%)) 70%, transparent));
 		}
 
 		93% {

@@ -1,3 +1,6 @@
 node_modules
 test-results
 playwright-report
+
+# Сборка стенда компонентов для e2e.
+test/ui/dist

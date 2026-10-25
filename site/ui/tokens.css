@@ -1,0 +1,68 @@
+/*
+ * Токены компонентов из `ui/`. Сайт подключает файл один раз, в базовом layout, и в своём
+ * global.css переназначает те токены, что расходятся с его палитрой: `--ui-bg: var(--bg)`.
+ *
+ * Префикс `--ui-` нужен, потому что сайты называют одно и то же по-разному: у одного `--muted`
+ * -- цвет текста, у другого фон. Компоненты читают только свои токены, а палитру сайта
+ * им передаёт сам сайт.
+ *
+ * `:where` обнуляет специфичность, поэтому переназначение в `:root` сайта побеждает
+ * независимо от порядка подключения.
+ */
+:where(:root) {
+	--ui-bg: light-dark(#fff, #18181b);
+	--ui-fg: light-dark(#18181b, #f4f4f5);
+	--ui-muted: light-dark(#71717a, #a1a1aa);
+	--ui-surface: light-dark(#f4f4f5, #27272a);
+	--ui-border: light-dark(#e4e4e7, #3f3f46);
+	--ui-border-strong: light-dark(#d4d4d8, #52525b);
+
+	/* Главное действие: фон кнопки и её текст. */
+	--ui-primary: light-dark(#18181b, #f4f4f5);
+	--ui-primary-fg: light-dark(#fff, #18181b);
+
+	/* Акцент: иконки заголовков, ссылки, подложка иконки в дропзоне. */
+	--ui-accent: light-dark(#2563eb, #60a5fa);
+	--ui-accent-soft: light-dark(#eff6ff, #1e3a5f);
+
+	/* Наведение и выбранное: подложка, рамка и текст. */
+	--ui-hover-bg: color-mix(in srgb, var(--ui-accent-soft) 65%, transparent);
+	--ui-hover-border: color-mix(in srgb, var(--ui-accent) 22%, transparent);
+	--ui-hover-fg: var(--ui-accent);
+	--ui-selected-soft: var(--ui-accent-soft);
+
+	/* Фокус с клавиатуры: рамка поля и кольцо вокруг. */
+	--ui-focus: var(--ui-accent);
+	--ui-ring: color-mix(in oklch, var(--ui-accent) 55%, transparent);
+
+	--ui-danger: light-dark(#dc2626, #f87171);
+	--ui-danger-bg: light-dark(#fef2f2, #3f1d1d);
+	--ui-success: light-dark(#16a34a, #4ade80);
+	--ui-warning: light-dark(#c2410c, #fb923c);
+	--ui-warning-bg: light-dark(#fff7ed, #3b2410);
+
+	--ui-radius: 0.75rem;
+	--ui-radius-sm: 0.5rem;
+	--ui-shadow-sm: 0 1px 2px rgb(0 0 0 / 6%);
+	--ui-shadow-md: 0 4px 16px rgb(0 0 0 / 12%);
+	--ui-font-mono: ui-monospace, sfmono-regular, menlo, monospace;
+
+	/* Отступ страницы от края экрана: подсказка не вылезает за него. */
+	--ui-gutter: 1rem;
+
+	/* Карточка: у сайтов она разная, поэтому её размеры тоже токены. */
+	--ui-card-bg: var(--ui-bg);
+	--ui-card-fg: inherit;
+	--ui-card-border: 1px solid var(--ui-border);
+	--ui-card-shadow: var(--ui-shadow-sm);
+	--ui-card-radius: var(--ui-radius);
+	--ui-card-padding: 1.5rem;
+	--ui-card-padding-narrow: 1.125rem;
+	--ui-card-gap: 1.25rem;
+
+	/* Поле ввода. */
+	--ui-input-height: 2.75rem;
+	--ui-input-radius: var(--ui-radius-sm);
+	--ui-input-border: var(--ui-border);
+	--ui-input-bg: transparent;
+}

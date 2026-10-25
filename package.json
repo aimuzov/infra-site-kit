@@ -2,7 +2,7 @@
 	"name": "@aimuzov/infra-site-kit",
 	"version": "4.0.0",
 	"private": true,
-	"description": "Shared Prettier, Stylelint, oxlint and Playwright configs, the author credit, the not-found page, the theme switch and peek, the base root styles, Yandex Metrika and the reader changelog for the aimuzov sites",
+	"description": "Shared Prettier, Stylelint, oxlint and Playwright configs, the author credit, the not-found page, the theme switch and peek, shared Svelte UI parts with a file dropzone, the base root styles, Yandex Metrika and the reader changelog for the aimuzov sites",
 	"license": "MIT",
 	"repository": "github:aimuzov/infra-site-kit",
 	"type": "module",
@@ -55,6 +55,16 @@
 		"./playwright/checks": {
 			"types": "./playwright/checks.d.mts",
 			"default": "./playwright/checks.mjs"
+		},
+		"./ui/tokens.css": "./site/ui/tokens.css",
+		"./ui/files.js": {
+			"types": "./site/ui/files.d.ts",
+			"default": "./site/ui/files.js"
+		},
+		"./ui/*.svelte": {
+			"types": "./site/ui/*.svelte.d.ts",
+			"svelte": "./site/ui/*.svelte",
+			"default": "./site/ui/*.svelte"
 		}
 	},
 	"bin": {
@@ -75,8 +85,8 @@
 	"scripts": {
 		"format": "prettier --write .",
 		"format:check": "prettier --check .",
-		"test": "node --test 'test/*.test.mjs'",
-		"test:e2e": "playwright test"
+		"test": "node --import ./test/svelte-register.mjs --test 'test/*.test.mjs'",
+		"test:e2e": "vite build -c test/ui/vite.config.mjs && playwright test"
 	},
 	"dependencies": {
 		"@axe-core/playwright": "4.13.0",
@@ -89,6 +99,7 @@
 		"stylelint-order": "8.1.1"
 	},
 	"peerDependencies": {
+		"@lucide/svelte": "^1.39.0",
 		"@playwright/test": "^1.64.0",
 		"astro": "^7.0.0",
 		"oxlint": "^1.87.0",
@@ -97,10 +108,14 @@
 		"svelte": "^5.0.0"
 	},
 	"devDependencies": {
+		"@lucide/svelte": "1.39.0",
 		"@playwright/test": "1.64.0",
+		"@sveltejs/vite-plugin-svelte": "7.3.1",
 		"oxlint": "1.87.0",
 		"prettier": "3.9.9",
-		"stylelint": "17.16.0"
+		"stylelint": "17.16.0",
+		"svelte": "5.57.2",
+		"vite": "8.3.4"
 	},
 	"keywords": [
 		"astro-component",
@@ -114,6 +129,9 @@
 			"optional": true
 		},
 		"svelte": {
+			"optional": true
+		},
+		"@lucide/svelte": {
 			"optional": true
 		}
 	}
