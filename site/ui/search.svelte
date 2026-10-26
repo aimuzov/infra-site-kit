@@ -74,10 +74,13 @@
 	/** @param {string} text */
 	async function run(text) {
 		// Старые результаты не должны открываться по Enter, пока ищется новый запрос.
-		hits = []
-		pending = Boolean(text.trim())
+		// Флаг только пишем, не читаем: иначе $effect подписался бы на него и перезапускал поиск.
+		const searching = Boolean(text.trim())
 
-		if (!pending) return
+		hits = []
+		pending = searching
+
+		if (!searching) return
 
 		try {
 			const search = await (await load()).debouncedSearch(text)
