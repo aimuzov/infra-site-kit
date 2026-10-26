@@ -46,6 +46,8 @@ export type AlertProps = {
 }
 
 export type FieldProps = {
+	/** Язык подписей компонента, по умолчанию `ru`. */
+	locale?: string
 	label: string
 	/** id поля ввода: по клику на подпись фокус уходит в него. */
 	for?: string
@@ -72,18 +74,24 @@ export type SkeletonProps = {
 }
 
 export type CopyValueProps = {
+	/** Язык подписей компонента, по умолчанию `ru`. */
+	locale?: string
 	value: string
 	/** Подпись слева, подсказка и озвучка кнопки. */
 	label?: string
 }
 
 export type InfoTipProps = {
+	/** Язык подписей компонента, по умолчанию `ru`. */
+	locale?: string
 	text: string
 	/** Озвучка кнопки, по умолчанию «Пояснение». */
 	label?: string
 }
 
 export type DropzoneProps = {
+	/** Язык подписей компонента, по умолчанию `ru`. */
+	locale?: string
 	/** Файл прошёл проверку типа и размера. */
 	onfile: (file: File) => void
 	/** Как у `<input type="file">`: `.zip,.xml`, `application/json`. */
@@ -108,4 +116,11 @@ export type DropzoneProps = {
 export type DropzoneExports = {
 	/** Открывает диалог выбора файла. */
 	pick: () => void
+}
+
+export type LangSwitchProps = {
+	/** Язык страницы. */
+	locale: string
+	/** Путь страницы, от него строится адрес на другом языке. */
+	path: string
 }

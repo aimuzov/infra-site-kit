@@ -1,3 +1,5 @@
+import { t } from '../i18n.js'
+
 /**
  * Проверка файла перед загрузкой: тип по `accept` и размер. Отдельно от дропзоны,
  * чтобы правило было одно и для перетаскивания, и для выбора в диалоге, и чтобы его
@@ -37,8 +39,8 @@ export function matchesAccept(file, accept = '') {
  *
  * @param {number} bytes
  */
-export function formatSize(bytes) {
-	const units = ['Б', 'КБ', 'МБ', 'ГБ']
+export function formatSize(bytes, locale = 'ru') {
+	const units = t(locale, 'files.units').split(',')
 	let value = bytes
 	let unit = 0
 
@@ -49,7 +51,7 @@ export function formatSize(bytes) {
 
 	const rounded = unit === 0 || value >= 10 ? Math.round(value) : Math.round(value * 10) / 10
 
-	return `${String(rounded).replace('.', ',')} ${units[unit]}`
+	return `${locale === 'ru' ? String(rounded).replace('.', ',') : rounded} ${units[unit]}`
 }
 
 /**
@@ -78,10 +80,11 @@ export function pickFile(accept = '') {
  * @param {{ name: string, type: string, size: number }} file
  * @param {{ accept?: string, maxSize?: number }} [rules]
  */
-export function rejectFile(file, { accept, maxSize } = {}) {
-	if (!matchesAccept(file, accept)) return `Этот тип файла не подходит: ${file.name}`
+export function rejectFile(file, { accept, maxSize } = {}, locale = 'ru') {
+	if (!matchesAccept(file, accept)) return t(locale, 'files.wrongType', { name: file.name })
 
-	if (maxSize !== undefined && file.size > maxSize) return `Файл больше ${formatSize(maxSize)}`
+	if (maxSize !== undefined && file.size > maxSize)
+		return t(locale, 'files.tooBig', { size: formatSize(maxSize, locale) })
 
 	return null
 }

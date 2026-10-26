@@ -2,6 +2,8 @@
 	import FolderOpen from '@lucide/svelte/icons/folder-open'
 	import Upload from '@lucide/svelte/icons/upload'
 
+	import { t } from '../i18n.js'
+
 	import { rejectFile } from './files.js'
 
 	/**
@@ -25,9 +27,10 @@
 		accept = '',
 		maxSize,
 		disabled = false,
-		title = 'Перетащите файл сюда',
+		locale = 'ru',
+		title = t(locale, 'dropzone.title'),
 		note,
-		button = 'Выбрать файл',
+		button = t(locale, 'dropzone.button'),
 		label,
 		error = null,
 		size = 'md',
@@ -57,7 +60,7 @@
 	function take(file) {
 		if (!file || disabled) return
 
-		rejected = rejectFile(file, { accept, maxSize })
+		rejected = rejectFile(file, { accept, maxSize }, locale)
 
 		if (!rejected) onfile(file)
 	}

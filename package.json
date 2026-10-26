@@ -41,6 +41,11 @@
 			"default": "./site/theme.js"
 		},
 		"./theme-boot.astro": "./site/theme-boot.astro",
+		"./i18n.js": {
+			"types": "./site/i18n.d.ts",
+			"default": "./site/i18n.js"
+		},
+		"./i18n-head.astro": "./site/i18n-head.astro",
 		"./metrika.astro": "./site/metrika.astro",
 		"./metrika-pixel.astro": "./site/metrika-pixel.astro",
 		"./changelog.js": {

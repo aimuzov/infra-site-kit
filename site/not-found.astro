@@ -1,6 +1,7 @@
 ---
 // Общая 404: "4" лицо "4", заголовок, кнопки и подсказки по sitemap. Обёртку (Base, шапку,
 // подвал, высоту `<main>`) рисует сайт, цвета и радиусы приходят его CSS-переменными.
+import { t } from './i18n.js'
 import { MARK, MARK_VIEWBOX } from './mark.js'
 
 type Props = {
@@ -20,15 +21,19 @@ type Props = {
 	scope?: string
 	/** Префиксы, которые в подсказки не попадают, например `['/ru/']` у английской 404. */
 	exclude?: string[]
+	/** Язык текстов по умолчанию, `ru` если не задан. */
+	locale?: string
 	class?: string
 }
 
+const locale = Astro.props.locale ?? 'ru'
+
 const {
-	title = 'Такой страницы нет',
-	text = 'Возможно, ссылка устарела или в ней опечатка.',
-	home = { href: '/', label: 'На главную' },
-	back = 'Назад',
-	suggest = 'Возможно, вы искали',
+	title = t(locale, 'notFound.title'),
+	text = t(locale, 'notFound.text'),
+	home = { href: locale === 'ru' ? '/' : `/${locale}/`, label: t(locale, 'notFound.home') },
+	back = t(locale, 'notFound.back'),
+	suggest = t(locale, 'notFound.suggest'),
 	sitemap = '/sitemap-index.xml',
 	scope,
 	exclude,

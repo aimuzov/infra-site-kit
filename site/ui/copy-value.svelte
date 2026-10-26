@@ -2,6 +2,8 @@
 	import Check from '@lucide/svelte/icons/check'
 	import Copy from '@lucide/svelte/icons/copy'
 
+	import { t } from '../i18n.js'
+
 	/**
 	 * @typedef {object} Props
 	 * @property {string} value
@@ -9,7 +11,7 @@
 	 */
 
 	/** @type {Props} */
-	let { value, label } = $props()
+	let { value, label, locale = 'ru' } = $props()
 
 	let copied = $state(false)
 
@@ -37,14 +39,14 @@
 		tabindex="-1"
 		type="button"
 		class={['copy__button', copied && 'copy__button--done']}
-		title={copied ? 'Скопировано' : `Скопировать ${label ?? ''}`.trim()}
-		aria-label={`Скопировать ${label ?? ''} ${value}`.replace(/\s+/g, ' ')}
+		title={copied ? t(locale, 'copy.copied') : `${t(locale, 'copy.copy')} ${label ?? ''}`.trim()}
+		aria-label={`${t(locale, 'copy.copy')} ${label ?? ''} ${value}`.replace(/\s+/g, ' ')}
 		onclick={copy}
 	>
 		<span class="copy__value">{value}</span>
 		{#if copied}<Check size={12} />{:else}<Copy size={12} />{/if}
 	</button>
-	<span class="copy__status" role="status">{copied ? 'Скопировано' : ''}</span>
+	<span class="copy__status" role="status">{copied ? t(locale, 'copy.copied') : ''}</span>
 </span>
 
 <style>

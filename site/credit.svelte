@@ -1,4 +1,5 @@
 <script>
+	import { t } from './i18n.js'
 	import { MARK } from './mark.js'
 
 	/**
@@ -7,11 +8,12 @@
 	 * @property {boolean} [copyright] Ставит год копирайта в начало, по умолчанию включено.
 	 * @property {'spread' | 'center'} [align] `spread` растягивает подпись по контейнеру:
 	 *   автор слева, исходники справа. `center` держит обе части по центру.
+	 * @property {string} [locale] Язык подписи, по умолчанию `ru`.
 	 * @property {string} [class]
 	 */
 
 	/** @type {Props} */
-	let { repo, copyright = true, align = 'spread', class: className } = $props()
+	let { repo, copyright = true, align = 'spread', locale = 'ru', class: className } = $props()
 
 	// Сервер рендерит год сборки. Приложение с рендером на клиенте сразу получает текущий,
 	// а статическая страница исправляет его через `syncYear` (это делает credit.astro).
@@ -37,7 +39,7 @@
 	<span class="credit__line">
 		<span class="credit__group">
 			{#if copyright}<span class="credit__year"><span data-year>{year}</span> ©</span>{/if}
-			Сделано с&nbsp;любовью
+			{t(locale, 'credit.made')}
 			<a class="credit__link" href="https://github.com/aimuzov" target="_blank" rel="noopener"
 				><svg class="credit__icon credit__icon--mark" viewBox="-3 0 30.1 24" width="20" height="16" fill="currentColor" aria-hidden="true"
 					><path fill-rule="evenodd" d={MARK} /></svg
@@ -48,7 +50,7 @@
 			<a class="credit__link" href={repo} target="_blank" rel="noopener"
 				><svg class="credit__icon" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"
 					><path d={GITHUB} /></svg
-				>Исходный код</a
+				>{t(locale, 'credit.source')}</a
 			>
 		{/if}
 	</span>
