@@ -60,6 +60,14 @@
 	--ui-card-padding-narrow: 1.125rem;
 	--ui-card-gap: 1.25rem;
 
+	/* Меню языков: кнопка-пилюля и выпадающий список. Угловатый сайт ставит радиусы в 0. */
+	--ui-menu-button-radius: 1rem;
+	--ui-menu-button-height: 2rem;
+	--ui-menu-button-bg: transparent;
+	--ui-menu-radius: var(--ui-radius);
+	--ui-menu-item-radius: var(--ui-radius-sm);
+	--ui-menu-shadow: 0 12px 32px rgb(0 0 0 / 18%);
+
 	/* Поле ввода. */
 	--ui-input-height: 2.75rem;
 	--ui-input-radius: var(--ui-radius-sm);

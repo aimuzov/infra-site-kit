@@ -73,10 +73,11 @@
 			display: inline-flex;
 			gap: 6px;
 			align-items: center;
-			height: 32px;
+			height: var(--ui-menu-button-height, 32px);
 			padding: 0 9px 0 10px;
 			border: 1px solid var(--ui-border);
-			border-radius: 16px;
+			background: var(--ui-menu-button-bg, transparent);
+			border-radius: var(--ui-menu-button-radius, 16px);
 			font: 500 12px/1 var(--ui-font-mono, ui-monospace, monospace);
 			color: var(--ui-fg);
 			list-style: none;
@@ -119,9 +120,9 @@
 		margin: 0;
 		padding: 6px;
 		border: 1px solid var(--ui-border);
-		border-radius: var(--ui-radius, 10px);
+		border-radius: var(--ui-menu-radius, 10px);
 		background: var(--ui-card-bg, var(--ui-bg));
-		box-shadow: 0 12px 32px rgb(0 0 0 / 18%);
+		box-shadow: var(--ui-menu-shadow, 0 12px 32px rgb(0 0 0 / 18%));
 		list-style: none;
 	}
 
@@ -131,7 +132,7 @@
 		align-items: center;
 		justify-content: space-between;
 		padding: 8px 10px;
-		border-radius: var(--ui-radius-sm, 8px);
+		border-radius: var(--ui-menu-item-radius, 8px);
 		font-size: 14px;
 		color: var(--ui-fg);
 		text-decoration: none;
