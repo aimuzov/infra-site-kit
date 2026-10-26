@@ -101,3 +101,26 @@ test('the skeleton takes its size in the browser, not from a style attribute', a
 
 	await expect.poll(async () => (await skeleton.boundingBox())?.width).toBeCloseTo(12 * fontSize, 0)
 })
+
+test('the language menu opens, closes on Escape and outside, and remembers the choice', async ({ page }) => {
+	const menu = page.locator('details.lang')
+	const button = menu.locator('summary')
+
+	await expect(button).toHaveText(/RU/)
+	await button.click()
+	await expect(menu).toHaveAttribute('open', '')
+	await expect(menu.getByRole('link', { name: /English/ })).toHaveAttribute('href', '/en/ui/')
+	await expect(menu.getByRole('link', { name: /Русский/ })).toHaveAttribute('aria-current', 'true')
+
+	await page.keyboard.press('Escape')
+	await expect(menu).not.toHaveAttribute('open')
+	await expect(button).toBeFocused()
+
+	await button.click()
+	await page.locator('main').click({ position: { x: 5, y: 300 } })
+	await expect(menu).not.toHaveAttribute('open')
+
+	await button.click()
+	await menu.getByRole('link', { name: /English/ }).click()
+	await expect.poll(() => page.evaluate(() => document.cookie)).toContain('lang=en')
+})

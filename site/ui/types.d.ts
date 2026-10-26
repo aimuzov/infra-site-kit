@@ -121,6 +121,10 @@ export type DropzoneExports = {
 export type LangSwitchProps = {
 	/** Язык страницы. */
 	locale: string
-	/** Путь страницы, от него строится адрес на другом языке. */
+	/** Путь страницы, от него строятся адреса на других языках. */
 	path: string
+	/** Языки сайта, если их набор не общий. */
+	locales?: readonly string[]
+	/** Язык без префикса в адресе, если это не русский. */
+	defaultLocale?: string
 }
