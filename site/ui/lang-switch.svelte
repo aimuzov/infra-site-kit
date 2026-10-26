@@ -73,11 +73,11 @@
 			display: inline-flex;
 			gap: 6px;
 			align-items: center;
-			height: var(--ui-menu-button-height, 32px);
+			height: var(--ui-control-height, 32px);
 			padding: 0 9px 0 10px;
 			border: 1px solid var(--ui-border);
-			background: var(--ui-menu-button-bg, transparent);
-			border-radius: var(--ui-menu-button-radius, 16px);
+			background: var(--ui-control-bg, transparent);
+			border-radius: var(--ui-control-radius, 16px);
 			font: 500 12px/1 var(--ui-font-mono, ui-monospace, monospace);
 			color: var(--ui-fg);
 			list-style: none;

@@ -11,6 +11,7 @@ import CopyValue from '../site/ui/copy-value.svelte'
 import Dropzone from '../site/ui/dropzone.svelte'
 import { formatSize, rejectFile } from '../site/ui/files.js'
 import LangSwitch from '../site/ui/lang-switch.svelte'
+import ThemeToggle from '../site/ui/theme-toggle.svelte'
 
 const html = (component, props) => render(component, { props }).body
 
@@ -123,4 +124,13 @@ test('сайт с английским в корне задаёт свою сх�
 
 	assert.match(menu, /href="\/ru\/extras"/)
 	assert.match(menu, />EN</)
+})
+
+test('кнопка темы подписана на языке страницы и несёт обе иконки', () => {
+	const en = html(ThemeToggle, { locale: 'en' })
+
+	assert.match(en, /aria-label="Switch theme"/)
+	assert.match(en, /theme-toggle__sun/)
+	assert.match(en, /theme-toggle__moon/)
+	assert.match(html(ThemeToggle, { label: 'Тема' }), /aria-label="Тема"/)
 })

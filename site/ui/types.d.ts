@@ -134,3 +134,14 @@ export type LangSwitchProps = {
  * а сигнатура `Component` из Svelte ждёт первым служебный аргумент.
  */
 export type AstroComponent<Props> = (props: Props & { [directive: `client:${string}`]: unknown }) => unknown
+
+export type ThemeToggleProps = {
+	/** Язык подписи для экранных читалок. */
+	locale?: string
+	/** Своя подпись вместо общей. */
+	label?: string
+	/** Ключ выбора в localStorage, тот же, что у `ThemeBoot`. */
+	key?: string
+	/** Круг с другой темой вокруг кнопки. В выпадающем меню он мешает. */
+	peek?: boolean
+}
