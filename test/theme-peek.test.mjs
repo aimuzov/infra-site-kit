@@ -81,7 +81,6 @@ Object.assign(globalThis, {
 /** Кнопка темы с центром в точке (x, y). */
 const button = (x, y) => element({ left: x - 10, top: y - 10, width: 20, height: 20 })
 const peeks = () => document.body.children.filter((child) => child.classList.contains('theme-peek'))
-const move = (x, y) => page.listeners.pointermove({ clientX: x, clientY: y })
 
 test('coverRadius matches the plain circle area when the whole circle is on the screen', () => {
 	const r = coverRadius(500, 500, 1000, 1000, 0.1)
@@ -110,11 +109,11 @@ test('the peek stays off without a mouse', () => {
 	page.hover = true
 })
 
-test('pointer moves between two frames are drawn once, measuring the button once', () => {
+test('scrolls between two frames are drawn once, measuring the button once', () => {
 	const anchor = button(100, 10)
 	const cleanup = themePeek(anchor)
 
-	for (let i = 0; i < 5; i++) move(100, 60 + i)
+	for (let i = 0; i < 5; i++) page.listeners.scroll()
 
 	assert.equal(page.frames.size, 1)
 	page.flush()
@@ -123,55 +122,31 @@ test('pointer moves between two frames are drawn once, measuring the button once
 	cleanup()
 })
 
-test('the circle grows faintly as the pointer nears the button and is not there far away', () => {
-	const cleanup = themePeek(button(100, 10))
-
-	move(100, 400)
-	page.flush()
-	assert.equal(peeks().length, 0)
-
-	move(100, 60)
-	page.flush()
-
-	const [peek] = peeks()
-	const r = parseFloat(peek.style.getPropertyValue('--peek-r'))
-
-	assert.ok(r > 0 && r < 60, String(r))
-	assert.ok(Number(peek.style.opacity) < 0.35)
-	assert.equal(peek.dataset.scheme, 'dark')
-	assert.equal(peek.classList.contains('theme-peek--open'), false)
-
-	cleanup()
-	assert.equal(peeks().length, 0)
-})
-
-test('with approach off the circle stays hidden as the pointer nears and still opens on hover', () => {
+test('the page does not follow the pointer, so nothing grows on the way to the button', () => {
 	const anchor = button(100, 10)
-	const cleanup = themePeek(anchor, { approach: false })
+	const cleanup = themePeek(anchor)
 
-	move(100, 30)
+	assert.equal(page.listeners.pointermove, undefined)
 	page.flush()
 	assert.equal(peeks().length, 0)
 
 	anchor.listeners.pointerenter()
 	page.flush()
-
-	const [peek] = peeks()
-
-	assert.equal(peek.style.getPropertyValue('--peek-r'), `${coverRadius(100, 10, 1000, 800)}px`)
-	assert.equal(peek.classList.contains('theme-peek--open'), true)
+	assert.equal(peeks().length, 1)
 
 	cleanup()
+	assert.equal(peeks().length, 0)
 })
 
-test('of two buttons only the one nearest the pointer draws the circle', () => {
-	const cleanups = [themePeek(button(100, 10)), themePeek(button(160, 10))]
+test('of two buttons side by side only the hovered one opens its circle', () => {
+	const left = button(100, 10)
+	const cleanups = [themePeek(left), themePeek(button(160, 10))]
 
-	move(150, 40)
+	left.listeners.pointerenter()
 	page.flush()
 
 	assert.equal(peeks().length, 1)
-	assert.equal(peeks()[0].style.getPropertyValue('--peek-x'), '160px')
+	assert.equal(peeks()[0].style.getPropertyValue('--peek-x'), '100px')
 
 	for (const cleanup of cleanups) cleanup()
 })
@@ -218,7 +193,6 @@ test('a click puts the circle out until the pointer comes onto a button again', 
 	assert.equal(peek.style.getPropertyValue('--peek-r'), '0px')
 
 	anchor.listeners.pointerleave()
-	move(100, 30)
 	page.flush()
 	assert.equal(peek.style.getPropertyValue('--peek-r'), '0px')
 
@@ -236,7 +210,6 @@ test('the copy leaves the page once the circle has shrunk to nothing', () => {
 	anchor.listeners.pointerenter()
 	page.flush()
 	anchor.listeners.pointerleave()
-	move(100, 400)
 	page.flush()
 
 	const [peek] = peeks()
@@ -265,9 +238,9 @@ test('target gets the current scheme, and a target equal to it shows nothing', (
 test('the last cleanup takes the page listeners and the pending frame away', () => {
 	const cleanups = [themePeek(button(100, 10)), themePeek(button(160, 10))]
 
-	move(100, 60)
+	page.listeners.scroll()
 	cleanups[0]()
-	assert.ok(page.listeners.pointermove)
+	assert.ok(page.listeners.scroll)
 
 	cleanups[1]()
 	assert.deepEqual(Object.keys(page.listeners), [])

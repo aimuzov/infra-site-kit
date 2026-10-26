@@ -181,7 +181,7 @@ import ThemeBoot from '@aimuzov/infra-site-kit/theme-boot.astro'
 
 ## Theme peek
 
-A theme button that shows what it switches to. The closer the pointer gets to the button, the wider a faint circle grows around it; on hover the circle opens to a third of the screen, and inside it the page is drawn in the other scheme. A click puts the circle out until the next hover. Touch screens and reduced motion get no circle.
+A theme button that shows what it switches to. On hover a circle around it opens to a third of the screen, and inside it the page is drawn in the other scheme. A click puts the circle out until the next hover. Touch screens and reduced motion get no circle.
 
 The circle holds a copy of the page painted in the other scheme: `color-scheme` on the copy flips the `light-dark()` colors, and the `light`/`dark` class is for a site that switches its tokens by a class. Such a site declares its light tokens on `:root, .light` as well, or the copy inside a dark page keeps the dark ones. Rules like `.dark .input` would still reach into a light copy, so they take `:not(.dark .light *)`. The current scheme is read from the root `color-scheme`, so it does not matter whether the choice lives in an attribute or a class.
 
@@ -196,9 +196,7 @@ The circle holds a copy of the page painted in the other scheme: `color-scheme` 
 
 The copy takes the place of `<body>`, so the site adds `.theme-peek` to its body rule for the layout and background: `body, .theme-peek { … }`.
 
-By default the circle shows the scheme opposite to the current one. A switch with a button per theme passes its own: `{@attach (node) => themePeek(node, { target: () => 'dark' })}`. When the target matches the current scheme there is nothing to show and the circle stays hidden. Of several buttons side by side, only the one nearest the pointer draws the circle, and a click on any of them puts it out for all.
-
-A button with other controls right next to it passes `{ approach: false }`: the faint circle no longer grows as the pointer nears, so hovering a neighbour leaves the page alone, and the circle opens only on hover of the button itself.
+By default the circle shows the scheme opposite to the current one. A switch with a button per theme passes its own: `{@attach (node) => themePeek(node, { target: () => 'dark' })}`. When the target matches the current scheme there is nothing to show and the circle stays hidden. A click on any of several buttons side by side puts the circle out for all of them.
 
 ## Base styles
 

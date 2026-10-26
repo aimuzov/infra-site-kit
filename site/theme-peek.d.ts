@@ -21,7 +21,5 @@ export function themePeek(
 	options?: {
 		/** Схема, которую показывает круг, по умолчанию противоположная текущей. */
 		target?: (current: Scheme) => Scheme | undefined
-		/** Растёт ли бледный круг, пока указатель приближается к кнопке, по умолчанию `true`. */
-		approach?: boolean
 	},
 ): (() => void) | undefined
