@@ -1,6 +1,8 @@
 <script>
 	import InfoTip from './info-tip.svelte'
 
+	import { t } from '../i18n.js'
+
 	/**
 	 * @typedef {object} Props
 	 * @property {string} label
@@ -12,16 +14,16 @@
 	 */
 
 	/** @type {Props} */
-	let { label, for: id, hint, span, missing = false, children } = $props()
+	let { label, for: id, hint, span, missing = false, locale = 'ru', children } = $props()
 </script>
 
 <div class={['field', span && `field--span-${span}`]}>
 	<!-- Значок вне label: иначе щелчок по нему уводил бы фокус в поле. -->
 	<div class="field__head">
 		<label class="field__label" for={id}>
-			{label}{#if missing}<span class="field__missing" title="Не заполнено"></span>{/if}
+			{label}{#if missing}<span class="field__missing" title={t(locale, 'field.missing')}></span>{/if}
 		</label>
-		{#if hint}<InfoTip text={hint} />{/if}
+		{#if hint}<InfoTip text={hint} {locale} />{/if}
 	</div>
 	{@render children()}
 </div>

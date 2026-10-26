@@ -4,7 +4,7 @@ type FileLike = { name: string; type: string }
 export function matchesAccept(file: FileLike, accept?: string): boolean
 
 /** Размер для человека: «512 КБ», «1,4 МБ». */
-export function formatSize(bytes: number): string
+export function formatSize(bytes: number, locale?: string): string
 
 /** Открывает диалог выбора файла. `null`, если окно закрыли. */
 export function pickFile(accept?: string): Promise<File | null>
@@ -13,4 +13,5 @@ export function pickFile(accept?: string): Promise<File | null>
 export function rejectFile(
 	file: FileLike & { size: number },
 	rules?: { accept?: string; maxSize?: number },
+	locale?: string,
 ): string | null

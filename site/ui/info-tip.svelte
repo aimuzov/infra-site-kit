@@ -1,8 +1,10 @@
 <script>
 	import CircleHelp from '@lucide/svelte/icons/circle-help'
 
+	import { t } from '../i18n.js'
+
 	/** @type {{ text: string, label?: string }} */
-	let { text, label = 'Пояснение' } = $props()
+	let { text, locale = 'ru', label = t(locale, 'infoTip.label') } = $props()
 
 	const id = $props.id()
 

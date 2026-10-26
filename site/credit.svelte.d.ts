@@ -10,6 +10,8 @@ declare const Credit: Component<{
 	/** `spread` уводит исходники к правому краю контейнера, `center` держит обе части
 	 * по центру. */
 	align?: 'spread' | 'center'
+	/** Язык подписи, по умолчанию \`ru\`. */
+	locale?: string
 	class?: string
 }>
 

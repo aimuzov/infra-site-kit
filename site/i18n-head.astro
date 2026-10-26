@@ -1,0 +1,12 @@
+---
+// `canonical` и `hreflang` для страницы с языковыми версиями. Ставится в <head>.
+// Адреса строятся от `Astro.site`, если он задан, иначе от адреса запроса.
+import { alternates, localizePath, localeOfPath } from './i18n.js'
+
+const base = Astro.site ?? Astro.url
+const page = new URL(Astro.url.pathname, base)
+const canonical = new URL(localizePath(page.pathname, localeOfPath(page.pathname)), page.origin)
+---
+
+<link rel="canonical" href={canonical.href} />
+{alternates(page).map(({ hreflang, href }) => <link rel="alternate" hreflang={hreflang} href={href} />)}
