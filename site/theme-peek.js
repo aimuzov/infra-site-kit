@@ -1,18 +1,11 @@
 /**
- * Подглядывание за другой темой из переключателя темы. Чем ближе указатель к кнопке,
- * тем шире вокруг неё бледный круг, а при наведении круг раскрывается на треть экрана.
- * Внутри круга страница нарисована в другой схеме: это копия страницы, положенная поверх,
+ * Подглядывание за другой темой из переключателя темы: при наведении на кнопку вокруг неё
+ * раскрывается круг на треть экрана. Внутри круга страница нарисована в другой схеме: это копия страницы, положенная поверх,
  * а клик гасит круг до следующего наведения.
  */
 
 /** @typedef {'light' | 'dark'} Scheme */
 
-/** Расстояние от центра кнопки, с которого круг начинает проявляться. */
-const REACH = 260
-/** Радиус круга вплотную к кнопке: это намёк, а ещё не превью. */
-const NEAR = 60
-/** Насколько другая тема просвечивает у самой кнопки, в полную силу только при наведении. */
-const FAINT = 0.35
 /** Доля экрана, которую закрывает раскрытый круг. */
 const COVER = 0.33
 /** На сколько раскрытый круг вырастает на вдохе. */
@@ -30,15 +23,12 @@ const PULSE = 1.05
  */
 
 /**
- * Круги на странице. У переключателя с кнопкой на каждую тему их несколько рядом, поэтому
- * круг достаётся только ближайшей к указателю кнопке, иначе они бы наслаивались.
+ * Круги на странице. У переключателя с кнопкой на каждую тему их несколько рядом.
  * @type {Map<HTMLElement, { target: (current: Scheme) => Scheme | undefined, hovered: boolean, render: (view: View) => void, settle: (event: TransitionEvent) => void }>}
  */
 const peeks = new Map()
 /** После клика все круги погашены, пока указатель снова не зайдёт на одну из кнопок. */
 let dismissed = false
-/** @type {{ x: number, y: number } | undefined} */
-let pointer
 /** Уже запрошенный кадр: события между двумя кадрами отрисовываются один раз. */
 let frame = 0
 
@@ -171,20 +161,6 @@ function fill(copy, scheme) {
 	for (const [node, twin] of pairs) copyState(node, twin)
 }
 
-/** @param {PointerEvent} event */
-function onMove(event) {
-	pointer = { x: event.clientX, y: event.clientY }
-	schedule()
-}
-
-function onLeaveWindow() {
-	pointer = undefined
-
-	for (const entry of peeks.values()) entry.hovered = false
-
-	schedule()
-}
-
 /** @param {TransitionEvent} event */
 function onTransitionEnd(event) {
 	for (const { settle } of peeks.values()) settle(event)
@@ -192,39 +168,30 @@ function onTransitionEnd(event) {
 
 /** Слушатели страницы общие для всех кругов: включены, пока есть хотя бы один. */
 function listen() {
-	addEventListener('pointermove', onMove, { passive: true })
 	addEventListener('scroll', schedule, { passive: true })
 	addEventListener('resize', schedule)
 	addEventListener('transitionend', onTransitionEnd)
-	document.documentElement.addEventListener('pointerleave', onLeaveWindow)
 }
 
 function unlisten() {
-	removeEventListener('pointermove', onMove)
 	removeEventListener('scroll', schedule)
 	removeEventListener('resize', schedule)
 	removeEventListener('transitionend', onTransitionEnd)
-	document.documentElement.removeEventListener('pointerleave', onLeaveWindow)
 	cancelAnimationFrame(frame)
 	frame = 0
-	pointer = undefined
 }
 
 /**
  * Цепляет круг к кнопке темы. Как есть работает и как Svelte attachment:
  * `{@attach themePeek}`. Возвращает функцию очистки.
  * @param {HTMLElement} anchor
- * @param {{ target?: (current: Scheme) => Scheme | undefined, approach?: boolean }} [options]
+ * @param {{ target?: (current: Scheme) => Scheme | undefined }} [options]
  * `target` -- схема, которую показывает круг, по умолчанию противоположная текущей. Если она
- * совпадает с текущей, то показывать нечего и круг остаётся скрытым. `approach: false` убирает
- * бледный круг на подходе, когда вплотную к кнопке стоят другие: круг будет только при наведении.
+ * совпадает с текущей, то показывать нечего и круг остаётся скрытым.
  * @returns {(() => void) | undefined}
  */
-export function themePeek(
-	anchor,
-	{ target = (current) => (current === 'dark' ? 'light' : 'dark'), approach = true } = {},
-) {
-	// Без мыши приближаться нечем, а reduced motion просит обойтись без круга.
+export function themePeek(anchor, { target = (current) => (current === 'dark' ? 'light' : 'dark') } = {}) {
+	// Без мыши наводить нечем, а reduced motion просит обойтись без круга.
 	if (!matchMedia('(hover: hover)').matches || matchMedia('(prefers-reduced-motion: reduce)').matches) return
 
 	/** @type {HTMLElement | undefined} */
@@ -249,38 +216,14 @@ export function themePeek(
 	}
 
 	/**
-	 * Есть ли кнопке что показать, то есть её схема отличается от текущей.
+	 * Круг есть, только пока на кнопку навели и её схема отличается от текущей.
 	 * @param {View} view
-	 * @param {HTMLElement} button
+	 * @param {{ x: number, y: number, scheme: Scheme | undefined }} spot
 	 */
-	function live(view, button) {
-		const scheme = view.spots.get(button)?.scheme
+	function shape(view, { x, y, scheme }) {
+		if (dismissed || !entry.hovered || !scheme || scheme === view.current) return { r: 0, opacity: 0 }
 
-		return Boolean(scheme) && scheme !== view.current
-	}
-
-	/** @param {View} view */
-	function shape(view) {
-		const { x: cx, y: cy } = /** @type {{ x: number, y: number }} */ (view.spots.get(anchor))
-
-		if (dismissed || !live(view, anchor)) return { r: 0, opacity: 0 }
-
-		if (entry.hovered) return { r: openRadius(cx, cy, view.width, view.height), opacity: 1 }
-
-		if (!approach || !pointer) return { r: 0, opacity: 0 }
-
-		const own = Math.hypot(pointer.x - cx, pointer.y - cy)
-
-		for (const [other, spot] of view.spots) {
-			if (other !== anchor && live(view, other) && Math.hypot(pointer.x - spot.x, pointer.y - spot.y) < own) {
-				return { r: 0, opacity: 0 }
-			}
-		}
-
-		const closeness = Math.max(0, 1 - own / REACH)
-
-		// В квадрате: издалека круг почти не растёт, а у кнопки набирает быстро.
-		return { r: NEAR * closeness ** 2, opacity: FAINT * closeness }
+		return { r: openRadius(x, y, view.width, view.height), opacity: 1 }
 	}
 
 	/** @param {View} view */
@@ -289,7 +232,7 @@ export function themePeek(
 
 		if (!spot) return
 
-		const { r, opacity } = shape(view)
+		const { r, opacity } = shape(view, spot)
 
 		if (!r && !peek) return
 
