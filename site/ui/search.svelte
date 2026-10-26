@@ -75,8 +75,9 @@
 	async function run(text) {
 		// Старые результаты не должны открываться по Enter, пока ищется новый запрос.
 		hits = []
+		pending = Boolean(text.trim())
 
-		if (!text.trim()) return
+		if (!pending) return
 
 		try {
 			const search = await (await load()).debouncedSearch(text)
