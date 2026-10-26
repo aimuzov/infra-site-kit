@@ -124,9 +124,12 @@ const sections = visibleReleases(releases).map((r) => ({
 			display: grid;
 			gap: 2rem;
 
-			@media (width >= 56rem) {
-				grid-template-columns: 14rem minmax(0, 1fr);
-				align-items: start;
+			/* Колонка под оглавление, только когда оно есть: у одного релиза его нет. */
+			&:has(> .changelog__toc) {
+				@media (width >= 56rem) {
+					grid-template-columns: 14rem minmax(0, 1fr);
+					align-items: start;
+				}
 			}
 		}
 
