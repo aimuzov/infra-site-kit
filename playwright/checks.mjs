@@ -219,16 +219,21 @@ export async function expectPanelToggle(page, button, { path = '/' } = {}) {
 	await page.goto(path)
 
 	const panel = await button.getAttribute('data-panel')
+	const controls = await button.getAttribute('aria-controls')
 	const root = page.locator('html')
 	const attr = `data-panel-${panel}`
+	/** Значение для селектора атрибута в кавычках. */
+	const quoted = (/** @type {string | null} */ value) => `"${String(value).replace(/["\\]/g, '\\$&')}"`
 
-	// Подпись кнопки меняется со «Скрыть» на «Показать», поэтому дальше она ищется по панели.
-	button = page.locator(`button[data-panel="${panel}"]`)
+	// Подпись кнопки меняется со «Скрыть» на «Показать», а кнопок у панели может быть несколько,
+	// поэтому дальше кнопка ищется по месту среди кнопок своей панели: оно не меняется и после перезагрузки.
+	const siblings = page.locator(`button[data-panel=${quoted(panel)}]`)
+	const index = await button.evaluate((node, all) => all.indexOf(node), await siblings.elementHandles())
 
-	await expect(
-		page.locator(`#${await button.getAttribute('aria-controls')}`),
-		'aria-controls points nowhere',
-	).toHaveCount(1)
+	button = siblings.nth(index)
+
+	// id может быть любым, `#id` споткнулся бы о двоеточие или точку в нём.
+	await expect(page.locator(`[id=${quoted(controls)}]`), 'aria-controls points nowhere').toHaveCount(1)
 	await expect(button).toHaveAttribute('aria-expanded', 'true')
 
 	await button.click()
