@@ -77,7 +77,7 @@
 			padding: 0 9px 0 10px;
 			border: 1px solid var(--ui-border);
 			border-radius: 16px;
-			font: 500 12px/1 var(--ui-mono, ui-monospace, monospace);
+			font: 500 12px/1 var(--ui-font-mono, ui-monospace, monospace);
 			color: var(--ui-fg);
 			list-style: none;
 			transition: border-color 0.15s;
@@ -147,7 +147,7 @@
 		}
 
 		& code {
-			font: 500 11px/1 var(--ui-mono, ui-monospace, monospace);
+			font: 500 11px/1 var(--ui-font-mono, ui-monospace, monospace);
 			color: var(--ui-muted);
 		}
 	}
