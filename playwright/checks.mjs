@@ -153,8 +153,9 @@ export async function expectThemeToggle(page, button, { path = '/', persist = tr
 }
 
 /**
- * Наводит курсор на кнопку темы и проверяет круг из `theme-peek.js`: он раскрывается
- * с копией страницы в другой схеме, скрыт от вспомогательных технологий и гаснет по клику.
+ * Наводит курсор на кнопку темы и проверяет круг из `theme-peek.js`: он растёт от кнопки,
+ * а не встаёт сразу в полный размер, несёт копию страницы в другой схеме, скрыт от
+ * вспомогательных технологий и гаснет по клику.
  *
  * @param {Page} page
  * @param {Locator} button
@@ -166,8 +167,35 @@ export async function expectThemePeek(page, button, { path = '/' } = {}) {
 
 	const peek = page.locator('body > .theme-peek')
 
+	// Радиус круга по кадрам с его появления. Запись -- до наведения, иначе начало роста не застать.
+	await page.evaluate(() => {
+		const radii = (window.__peekRadii = [])
+		let since = 0
+
+		const sample = (/** @type {number} */ now) => {
+			const node = document.querySelector('body > .theme-peek')
+			const radius = node ? parseFloat(getComputedStyle(node).clipPath.replace(/^circle\(/, '')) : NaN
+
+			if (Number.isFinite(radius)) {
+				since ||= now
+				radii.push(radius)
+			}
+
+			if (!since || now - since < 400) requestAnimationFrame(sample)
+		}
+
+		requestAnimationFrame(sample)
+	})
+
 	await button.hover()
 	await expect(peek).toHaveClass(/\btheme-peek--open\b/)
+	await expect.poll(() => page.evaluate(() => window.__peekRadii.length)).toBeGreaterThan(5)
+
+	const radii = await page.evaluate(() => window.__peekRadii)
+
+	expect(Math.min(...radii), 'the peek circle opens at full size instead of growing').toBeLessThan(
+		Math.max(...radii) / 2,
+	)
 	await expect(peek).toHaveAttribute('data-scheme', 'dark')
 	await expect(peek).toHaveAttribute('aria-hidden', 'true')
 	expect(await peek.evaluate((node) => node.inert && node.childElementCount > 0)).toBe(true)

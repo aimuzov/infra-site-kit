@@ -244,6 +244,12 @@ export function themePeek(anchor, { target = (current) => (current === 'dark' ? 
 			document.body.append(peek)
 		}
 
+		// Копия скроллится вместе со страницей, поэтому центр в координатах документа.
+		// Центр ставится до снимка первого кадра: без него clip-path недействителен, считается
+		// `none`, а из `none` transition не растёт и круг сразу встаёт в полный размер.
+		peek.style.setProperty('--peek-x', `${spot.x + scrollX}px`)
+		peek.style.setProperty('--peek-y', `${spot.y + scrollY}px`)
+
 		// Сжимающийся круг остаётся со старой копией, свежая снимается только для растущего.
 		if (r && spot.scheme && peek.dataset.scheme !== spot.scheme) {
 			const first = !peek.dataset.scheme
@@ -251,16 +257,14 @@ export function themePeek(anchor, { target = (current) => (current === 'dark' ? 
 			fill(peek, spot.scheme)
 
 			// Первый кадр с нулевым кругом, иначе transition не от чего расти.
-			if (first) peek.getBoundingClientRect()
+			if (first) getComputedStyle(peek).clipPath
 		}
 
-		// Копия скроллится вместе со страницей, поэтому центр в координатах документа.
-		peek.style.setProperty('--peek-x', `${spot.x + scrollX}px`)
-		peek.style.setProperty('--peek-y', `${spot.y + scrollY}px`)
+		// Дыхание останавливается до смены радиуса: см. aim().
+		aim(entry.hovered && r > 0 ? { x: spot.x + scrollX, y: spot.y + scrollY, r } : undefined)
 		peek.style.setProperty('--peek-r', `${r}px`)
 		peek.style.opacity = String(opacity)
 		peek.classList.toggle('theme-peek--open', entry.hovered && r > 0)
-		aim(entry.hovered && r > 0 ? { x: spot.x + scrollX, y: spot.y + scrollY, r } : undefined)
 	}
 
 	/**
@@ -279,8 +283,15 @@ export function themePeek(anchor, { target = (current) => (current === 'dark' ? 
 		if (breath && next && breath.x === next.x && breath.y === next.y && breath.r === next.r) return
 
 		breath = next
-		pulse?.cancel()
+
+		if (!pulse) return
+
+		pulse.cancel()
 		pulse = undefined
+		// Отменённое дыхание и новый радиус в одном пересчёте стилей Chrome не анимирует:
+		// круг прыгал в ноль без transition, transitionend не приходил, и круг оставался висеть.
+		// Пересчёт без дыхания отдельно даёт transition точку, от которой идти.
+		if (peek) getComputedStyle(peek).clipPath
 	}
 
 	function breathe() {
