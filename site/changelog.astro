@@ -1,7 +1,7 @@
 ---
 // Общая страница "Что нового": оглавление по релизам и раздел на релиз. Обёртку (Base, шапку,
 // подвал) рисует сайт, цвета и отступы приходят его CSS-переменными.
-import { itemHtml, releaseDate, releaseId, visibleReleases } from './changelog.js'
+import { itemHtml, localizeRelease, releaseDate, releaseId, visibleReleases } from './changelog.js'
 
 type Release = import('./changelog.js').Release
 
@@ -17,6 +17,7 @@ type Props = {
 	toc?: string | false
 	/** Подпись версии в строке под заголовком раздела. */
 	versionLabel?: string
+	/** Язык дат, `ru-RU`; по его первой части выбирается и язык записей `{ ru, en }`. */
 	locale?: string
 	class?: string
 }
@@ -32,8 +33,10 @@ const {
 	class: className,
 } = Astro.props
 
+const lang = locale.split('-')[0]
+
 const sections = visibleReleases(releases).map((r) => ({
-	...r,
+	...localizeRelease(r, lang),
 	id: releaseId(r.version),
 	svg: r.icon ? icons[r.icon] : undefined,
 }))
