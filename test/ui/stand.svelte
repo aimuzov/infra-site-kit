@@ -9,6 +9,7 @@
 	import Field from '../../site/ui/field.svelte'
 	import Input from '../../site/ui/input.svelte'
 	import LangSwitch from '../../site/ui/lang-switch.svelte'
+	import Search from '../../site/ui/search.svelte'
 	import Skeleton from '../../site/ui/skeleton.svelte'
 	import { pickFile } from '../../site/ui/files.js'
 
@@ -20,7 +21,10 @@
 </script>
 
 <main style="display: grid; gap: 1rem; max-width: 40rem; margin: 2rem auto; padding: 0 1rem; font-family: system-ui">
-	<div style="display: flex; justify-content: flex-end"><LangSwitch locale="ru" path="/ui/" /></div>
+	<div style="display: flex; gap: 0.5rem; justify-content: flex-end">
+		<Search bundle="/ui/pagefind/" />
+		<LangSwitch locale="ru" path="/ui/" />
+	</div>
 	<Card title="Выгрузка" info="Справка о выгрузке">
 		{#snippet action()}<ChipButton onclick={() => zone.pick()}>Заменить</ChipButton>{/snippet}
 		<Dropzone bind:this={zone} accept=".json,application/json" maxSize={1024} note="result.json" onfile={(file) => (taken = file.name)} />

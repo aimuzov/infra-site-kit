@@ -27,4 +27,12 @@ export default {
 	'theme.toggle': 'Сменить тему',
 	'lang.switch': 'English',
 	'lang.label': 'Язык',
+
+	'search.open': 'Поиск по сайту',
+	'search.placeholder': 'Что найти?',
+	'search.empty': 'Ничего не нашлось по запросу «{query}»',
+	'search.unavailable': 'Поиск заработает после сборки сайта: индекс строится по готовым страницам',
+	'search.select': 'открыть',
+	'search.navigate': 'выбрать',
+	'search.close': 'закрыть',
 }

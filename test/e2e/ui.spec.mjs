@@ -124,3 +124,28 @@ test('the language menu opens, closes on Escape and outside, and remembers the c
 	await menu.getByRole('link', { name: /English/ }).click()
 	await expect.poll(() => page.evaluate(() => document.cookie)).toContain('lang=en')
 })
+
+test('search opens by the button and by Cmd/Ctrl-K, finds a section and closes on Escape', async ({ page }) => {
+	const dialog = page.getByRole('dialog', { name: 'Поиск по сайту' })
+	const input = dialog.getByRole('searchbox', { name: 'Что найти?' })
+
+	await page.getByRole('button', { name: 'Поиск по сайту' }).click()
+	await expect(input).toBeFocused()
+
+	await input.fill('ожидания')
+
+	const hit = dialog.locator('.search__hit').first()
+
+	await expect(hit).toContainText('Журнал записи')
+	await expect(hit).toContainText('Лист ожидания')
+	await expect(hit).toHaveAttribute('href', '/ui/doc#waitlist')
+	await expect(hit.locator('.search__mark').first()).toContainText('ожидания')
+
+	await page.keyboard.press('Escape')
+	await expect(dialog).toBeHidden()
+
+	await page.keyboard.press('ControlOrMeta+k')
+	await expect(dialog).toBeVisible()
+	await input.fill('несуществующееслово')
+	await expect(dialog.getByRole('status')).toContainText('Ничего не нашлось')
+})

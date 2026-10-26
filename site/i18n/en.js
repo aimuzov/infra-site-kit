@@ -23,4 +23,12 @@ export default {
 	'theme.toggle': 'Switch theme',
 	'lang.switch': 'Русский',
 	'lang.label': 'Language',
+
+	'search.open': 'Search the site',
+	'search.placeholder': 'What are you looking for?',
+	'search.empty': 'Nothing found for “{query}”',
+	'search.unavailable': 'Search works after the site is built: the index is made from the finished pages',
+	'search.select': 'open',
+	'search.navigate': 'move',
+	'search.close': 'close',
 }
