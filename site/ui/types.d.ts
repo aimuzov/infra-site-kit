@@ -121,6 +121,27 @@ export type DropzoneExports = {
 export type LangSwitchProps = {
 	/** Язык страницы. */
 	locale: string
-	/** Путь страницы, от него строится адрес на другом языке. */
+	/** Путь страницы, от него строятся адреса на других языках. */
 	path: string
+	/** Языки сайта, если их набор не общий. */
+	locales?: readonly string[]
+	/** Язык без префикса в адресе, если это не русский. */
+	defaultLocale?: string
+}
+
+/**
+ * Вызов из Astro: он передаёт компоненту props вместе с `client:*` первым аргументом,
+ * а сигнатура `Component` из Svelte ждёт первым служебный аргумент.
+ */
+export type AstroComponent<Props> = (props: Props & { [directive: `client:${string}`]: unknown }) => unknown
+
+export type ThemeToggleProps = {
+	/** Язык подписи для экранных читалок. */
+	locale?: string
+	/** Своя подпись вместо общей. */
+	label?: string
+	/** Ключ выбора в localStorage, тот же, что у `ThemeBoot`. */
+	key?: string
+	/** Круг с другой темой вокруг кнопки. В выпадающем меню он мешает. */
+	peek?: boolean
 }

@@ -1,7 +1,8 @@
 import type { Component } from 'svelte'
 
-import type { LangSwitchProps } from './types.js'
+import type { AstroComponent, LangSwitchProps } from './types.js'
 
-declare const C: Component<LangSwitchProps>
+// Меню ставят в шапку из Astro-layout, поэтому у него есть и сигнатура для Astro.
+declare const C: Component<LangSwitchProps> & AstroComponent<LangSwitchProps>
 
 export default C

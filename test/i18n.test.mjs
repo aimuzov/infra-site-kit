@@ -11,6 +11,7 @@ import CopyValue from '../site/ui/copy-value.svelte'
 import Dropzone from '../site/ui/dropzone.svelte'
 import { formatSize, rejectFile } from '../site/ui/files.js'
 import LangSwitch from '../site/ui/lang-switch.svelte'
+import ThemeToggle from '../site/ui/theme-toggle.svelte'
 
 const html = (component, props) => render(component, { props }).body
 
@@ -88,12 +89,48 @@ test('с locale en компоненты переходят на английск
 	)
 })
 
-test('переключатель ведёт на тот же путь на другом языке', () => {
-	const toEn = html(LangSwitch, { locale: 'ru', path: '/account' })
-	const toRu = html(LangSwitch, { locale: 'en', path: '/en/account' })
+test('меню языков ведёт на тот же путь на каждом языке и отмечает текущий', () => {
+	const ru = html(LangSwitch, { locale: 'ru', path: '/account' })
+	const en = html(LangSwitch, { locale: 'en', path: '/en/account' })
 
-	assert.match(toEn, /href="\/en\/account"/)
-	assert.match(toEn, /hreflang="en"/)
-	assert.match(toRu, /href="\/account"/)
-	assert.match(toRu, /lang="ru"/)
+	assert.match(ru, /<details/)
+	assert.match(ru, />RU</)
+	assert.match(ru, /href="\/en\/account"[^>]*hreflang="en"/)
+	assert.match(ru, /href="\/account"[^>]*aria-current="true"/)
+	assert.match(ru, /Русский/)
+	assert.match(ru, /English/)
+	assert.match(en, /href="\/account"[^>]*lang="ru"/)
+	assert.match(en, /href="\/en\/account"[^>]*aria-current="true"/)
+})
+
+test('сайт с английским в корне задаёт свою схему языков', () => {
+	const routing = { locales: ['en', 'ru'], defaultLocale: 'en' }
+
+	assert.equal(localizePath('/extras', 'ru', routing), '/ru/extras')
+	assert.equal(localizePath('/ru/extras', 'en', routing), '/extras')
+	assert.equal(localizePath('/', 'ru', routing), '/ru/')
+	assert.equal(localizePath('/ru/', 'en', routing), '/')
+	assert.equal(localeOfPath('/ru/', routing), 'ru')
+	assert.equal(localeOfPath('/extras', routing), 'en')
+	assert.equal(negotiateLocale('de, fr', routing), 'en')
+	assert.equal(toLocale('xx', routing), 'en')
+	assert.deepEqual(alternates('https://x.test/ru/extras', routing), [
+		{ hreflang: 'en', href: 'https://x.test/extras' },
+		{ hreflang: 'ru', href: 'https://x.test/ru/extras' },
+		{ hreflang: 'x-default', href: 'https://x.test/extras' },
+	])
+
+	const menu = html(LangSwitch, { locale: 'en', path: '/extras', ...routing })
+
+	assert.match(menu, /href="\/ru\/extras"/)
+	assert.match(menu, />EN</)
+})
+
+test('кнопка темы подписана на языке страницы и несёт обе иконки', () => {
+	const en = html(ThemeToggle, { locale: 'en' })
+
+	assert.match(en, /aria-label="Switch theme"/)
+	assert.match(en, /theme-toggle__sun/)
+	assert.match(en, /theme-toggle__moon/)
+	assert.match(html(ThemeToggle, { label: 'Тема' }), /aria-label="Тема"/)
 })
