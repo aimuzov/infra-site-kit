@@ -36,6 +36,10 @@ test('путь переводится между языками, русский 
 	assert.equal(localizePath('/en/account', 'ru'), '/account')
 	assert.equal(localizePath('/en', 'ru'), '/')
 	assert.equal(localizePath('/en/', 'en'), '/en/')
+	// Так пути отдаёт Astro на сборке с `build.format: 'file'`.
+	assert.equal(localeOfPath('/en.html'), 'en')
+	assert.equal(localizePath('/en/login.html', 'ru'), '/login')
+	assert.equal(localizePath('/index.html', 'en'), '/en/')
 })
 
 test('alternates даёт обе версии и x-default на русскую', () => {

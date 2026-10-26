@@ -38,12 +38,24 @@ export function t(locale, key, vars, extra) {
 }
 
 /**
+ * Путь страницы без расширения: на сборке с `build.format: 'file'` Astro отдаёт `/en.html`
+ * и `/login/index.html`, а языки и `hreflang` считаются от `/en` и `/login`.
+ *
+ * @param {string} pathname
+ */
+export function pagePath(pathname) {
+	const bare = pathname.replace(/(?:\/index)?\.html$/, '')
+
+	return bare === '' ? '/' : bare
+}
+
+/**
  * Язык страницы по её пути: первый сегмент, если это язык не по умолчанию.
  *
  * @param {string} pathname
  */
 export function localeOfPath(pathname) {
-	const first = pathname.split('/')[1]
+	const first = pagePath(pathname).split('/')[1]
 
 	return first !== DEFAULT_LOCALE && LOCALES.includes(/** @type {never} */ (first))
 		? /** @type {import('./i18n.d.ts').Locale} */ (first)
@@ -53,10 +65,11 @@ export function localeOfPath(pathname) {
 /**
  * Тот же путь на другом языке: `/account` → `/en/account` и обратно.
  *
- * @param {string} pathname
+ * @param {string} path
  * @param {string} locale
  */
-export function localizePath(pathname, locale) {
+export function localizePath(path, locale) {
+	const pathname = pagePath(path)
 	const current = localeOfPath(pathname)
 	const bare = current === DEFAULT_LOCALE ? pathname : pathname.slice(current.length + 1) || '/'
 

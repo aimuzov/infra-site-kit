@@ -11,6 +11,7 @@ export type Strings = Partial<Record<Locale, Record<string, string>>>
 
 export function toLocale(value: string | null | undefined): Locale
 export function t(locale: string, key: string, vars?: Record<string, string | number>, extra?: Strings): string
+export function pagePath(pathname: string): string
 export function localeOfPath(pathname: string): Locale
 export function localizePath(pathname: string, locale: string): string
 export function alternates(url: URL | string): { hreflang: string; href: string }[]
