@@ -31,4 +31,5 @@ export default {
 	'search.select': 'open',
 	'search.navigate': 'move',
 	'search.close': 'close',
+	'search.closeLabel': 'Close search',
 }

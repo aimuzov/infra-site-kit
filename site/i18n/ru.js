@@ -35,4 +35,5 @@ export default {
 	'search.select': 'открыть',
 	'search.navigate': 'выбрать',
 	'search.close': 'закрыть',
+	'search.closeLabel': 'Закрыть поиск',
 }

@@ -155,4 +155,6 @@ export type SearchProps = {
 	limit?: number
 	/** Открывать поиск по Cmd/Ctrl-K и `/`. */
 	shortcut?: boolean
+	/** Срезать `.html` в адресах: для хостинга, который отдаёт `/page` по `page.html`. */
+	trimHtml?: boolean
 }

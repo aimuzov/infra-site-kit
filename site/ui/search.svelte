@@ -1,5 +1,6 @@
 <script>
 	import SearchIcon from '@lucide/svelte/icons/search'
+	import X from '@lucide/svelte/icons/x'
 	import { tick } from 'svelte'
 
 	import { t } from '../i18n.js'
@@ -10,10 +11,11 @@
 	 * @property {string} [bundle] Где лежит индекс Pagefind, по умолчанию `/pagefind/` в корне сайта.
 	 * @property {number} [limit] Сколько страниц показывать, у каждой до трёх разделов.
 	 * @property {boolean} [shortcut] Открывать поиск по Cmd/Ctrl-K и `/`.
+	 * @property {boolean} [trimHtml] Срезать `.html` в адресах: для хостинга, который отдаёт `/page` по `page.html`.
 	 */
 
 	/** @type {Props} */
-	let { locale = 'ru', bundle = '/pagefind/', limit = 8, shortcut = true } = $props()
+	let { locale = 'ru', bundle = '/pagefind/', limit = 8, shortcut = true, trimHtml = false } = $props()
 
 	/** @typedef {{ url: string, page: string, section?: string, excerpt: string }} Hit */
 	/**
@@ -33,11 +35,18 @@
 	let hits = $state([])
 	let active = $state(0)
 	let unavailable = $state(false)
+	// Пока ответа нет, «ничего не нашлось» не показываем: иначе оно мигает между нажатиями.
+	let pending = $state(false)
 	/** @type {Promise<any> | undefined} */
 	let pagefind
 
-	// Pagefind пишет адрес файла (`/docs/index.html`), а сайты открывают страницы без него.
-	const clean = (/** @type {string} */ url) => url.replace(/\.html(?=#|$)/, '').replace(/\/index(?=#|$)/, '/')
+	// Страница каталога в индексе -- `/docs/index.html`, а открывают её как `/docs/`.
+	// Остальные `.html` срезаются только по просьбе сайта: на обычном хостинге без них 404.
+	const clean = (/** @type {string} */ url) => {
+		const page = url.replace(/\/index\.html(?=#|$)/, '/')
+
+		return trimHtml ? page.replace(/\.html(?=#|$)/, '') : page
+	}
 	// Совпадения Pagefind размечает голым <mark>, а стилям нужен класс.
 	const marked = (/** @type {string} */ excerpt) => excerpt.replaceAll('<mark>', '<mark class="search__mark">')
 
@@ -45,23 +54,29 @@
 		// Адрес собирается в рантайме: при сборке сайта индекса ещё нет, и Vite не должен его искать.
 		const url = `${bundle}pagefind.js`
 
-		pagefind ??= import(/* @vite-ignore */ url).then(async (module) => {
-			// Адреса страниц Pagefind считает от каталога, где лежит его папка.
-			await module.options({ excerptLength: 16, baseUrl: bundle.replace(/[^/]+\/?$/, '') || '/' })
+		pagefind ??= import(/* @vite-ignore */ url)
+			.then(async (module) => {
+				// Адреса страниц Pagefind считает от каталога, где лежит его папка.
+				await module.options({ excerptLength: 16, baseUrl: bundle.replace(/[^/]+\/?$/, '') || '/' })
 
-			return module
-		})
+				return module
+			})
+			.catch((error) => {
+				// Упавшую загрузку не запоминаем: после сбоя сети следующий запрос попробует снова.
+				pagefind = undefined
+
+				throw error
+			})
 
 		return pagefind
 	}
 
 	/** @param {string} text */
 	async function run(text) {
-		if (!text.trim()) {
-			hits = []
+		// Старые результаты не должны открываться по Enter, пока ищется новый запрос.
+		hits = []
 
-			return
-		}
+		if (!text.trim()) return
 
 		try {
 			const search = await (await load()).debouncedSearch(text)
@@ -71,6 +86,8 @@
 
 			/** @type {PagefindPage[]} */
 			const pages = await Promise.all(search.results.slice(0, limit).map((/** @type {any} */ r) => r.data()))
+
+			if (text !== query) return
 
 			hits = pages.flatMap((page) => {
 				const title = page.meta.title ?? ''
@@ -86,9 +103,14 @@
 				}))
 			})
 			active = 0
+			unavailable = false
+			pending = false
 		} catch {
 			// В `astro dev` индекса нет: Pagefind строит его только по готовой сборке.
-			unavailable = true
+			if (text === query) {
+				unavailable = true
+				pending = false
+			}
 		}
 	}
 
@@ -178,11 +200,14 @@
 				spellcheck="false"
 				onkeydown={onKeydown}
 			/>
+			<button class="search__close" type="button" aria-label={t(locale, 'search.closeLabel')} onclick={() => dialog.close()}>
+				<X size={16} aria-hidden="true" />
+			</button>
 		</div>
 
 		{#if unavailable}
 			<p class="search__note" role="status">{t(locale, 'search.unavailable')}</p>
-		{:else if query.trim() && !hits.length}
+		{:else if query.trim() && !hits.length && !pending}
 			<p class="search__note" role="status">{t(locale, 'search.empty', { query })}</p>
 		{:else if hits.length}
 			<ul class="search__hits">
@@ -269,6 +294,29 @@
 		padding: 0 16px;
 		border-bottom: 1px solid var(--ui-border);
 		color: var(--ui-muted);
+	}
+
+	.search__close {
+		cursor: pointer;
+		display: inline-grid;
+		place-items: center;
+		width: 28px;
+		height: 28px;
+		padding: 0;
+		border: 0;
+		border-radius: var(--ui-menu-item-radius, 8px);
+		color: var(--ui-muted);
+		background: none;
+
+		&:hover {
+			color: var(--ui-fg);
+			background: var(--ui-surface);
+		}
+
+		&:focus-visible {
+			outline: 2px solid var(--ui-accent);
+			outline-offset: 2px;
+		}
 	}
 
 	.search__input {

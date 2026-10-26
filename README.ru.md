@@ -263,7 +263,7 @@ import Search from '@aimuzov/infra-site-kit/ui/search.svelte'
 - Pagefind компилирует индекс из WebAssembly, поэтому сайту со строгой CSP нужен `'wasm-unsafe-eval'` в `script-src`: в Astro это `scriptDirective: { resources: ["'self'", "'wasm-unsafe-eval'"] }`.
 - В `astro dev` индекса нет, окно так и пишет. Проверять поиск — в `astro build && pagefind --site dist && astro preview`.
 - Что индексировать, сайт размечает сам: `data-pagefind-body` на основном содержимом, `data-pagefind-ignore` на шапке и меню. Без разметки в индекс попадает вся страница.
-- `bundle` — путь к папке индекса, если сайт живёт не в корне. `limit` — сколько страниц показывать. `shortcut={false}` выключает горячие клавиши.
+- `bundle` — путь к папке индекса, если сайт живёт не в корне. `limit` — сколько страниц показывать. `shortcut={false}` выключает горячие клавиши. `trimHtml` срезает `.html` в адресах результатов — для хостинга, который отдаёт `/page` по `page.html`; `index.html` срезается всегда.
 
 ## Яндекс Метрика
 

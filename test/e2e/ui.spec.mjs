@@ -138,10 +138,15 @@ test('search opens by the button and by Cmd/Ctrl-K, finds a section and closes o
 
 	await expect(hit).toContainText('Журнал записи')
 	await expect(hit).toContainText('Лист ожидания')
-	await expect(hit).toHaveAttribute('href', '/ui/doc#waitlist')
+	await expect(hit).toHaveAttribute('href', '/ui/doc.html#waitlist')
 	await expect(hit.locator('.search__mark').first()).toContainText('ожидания')
 
 	await page.keyboard.press('Escape')
+	await expect(dialog).toBeHidden()
+
+	await page.keyboard.press('ControlOrMeta+k')
+	await expect(dialog).toBeVisible()
+	await dialog.getByRole('button', { name: 'Закрыть поиск' }).click()
 	await expect(dialog).toBeHidden()
 
 	await page.keyboard.press('ControlOrMeta+k')

@@ -263,7 +263,7 @@ import Search from '@aimuzov/infra-site-kit/ui/search.svelte'
 - Pagefind compiles its index from WebAssembly, so a site with a strict CSP needs `'wasm-unsafe-eval'` in `script-src`: in Astro that is `scriptDirective: { resources: ["'self'", "'wasm-unsafe-eval'"] }`.
 - `astro dev` has no index, and the dialog says so. Try search in `astro build && pagefind --site dist && astro preview`.
 - The site marks what to index: `data-pagefind-body` on the main content, `data-pagefind-ignore` on the header and menus. Without marks the whole page goes in.
-- `bundle` is the index folder when the site does not live at the root. `limit` is how many pages to show. `shortcut={false}` turns the keys off.
+- `bundle` is the index folder when the site does not live at the root. `limit` is how many pages to show. `shortcut={false}` turns the keys off. `trimHtml` drops `.html` from result links, for a host that serves `/page` from `page.html`; `index.html` is always dropped.
 
 ## Yandex Metrika
 
