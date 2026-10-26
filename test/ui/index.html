@@ -4,6 +4,13 @@
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<title>UI</title>
+		<!-- Скрытая панель стенда до отрисовки, как PanelsBoot на сайте. -->
+		<script src="/site/panels-boot.js" data-panels="demo" data-prefix="stand"></script>
+		<style>
+			:root[data-panel-demo='hidden'] #stand-panel {
+				display: none;
+			}
+		</style>
 	</head>
 	<body>
 		<div id="app"></div>

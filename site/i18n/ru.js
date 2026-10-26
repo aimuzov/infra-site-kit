@@ -36,4 +36,8 @@ export default {
 	'search.navigate': 'выбрать',
 	'search.close': 'закрыть',
 	'search.closeLabel': 'Закрыть поиск',
+
+	'panel.name': 'панель',
+	'panel.hide': 'Скрыть {name}',
+	'panel.show': 'Показать {name}',
 }

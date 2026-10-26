@@ -1,0 +1,17 @@
+---
+// Скрытые панели до отрисовки, как theme-boot.astro: файлом, а не инлайн-скриптом,
+// чтобы CSP Astro пропустила его по 'self'. Ставится в <head> страниц с панелями.
+// `no-inline`: маленький файл Vite иначе вклеит адресом data:, а его CSP не пускает.
+import boot from './panels-boot.js?url&no-inline'
+
+type Props = {
+	/** Имена панелей страницы, те же, что у `PanelToggle`. */
+	panels: string[]
+	/** Префикс ключей в localStorage, тот же, что у `PanelToggle`. По умолчанию `site`. */
+	prefix?: string
+}
+
+const { panels, prefix } = Astro.props
+---
+
+<script is:inline src={boot} data-panels={panels.join(' ')} data-prefix={prefix}></script>

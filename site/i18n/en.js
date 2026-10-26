@@ -32,4 +32,8 @@ export default {
 	'search.navigate': 'move',
 	'search.close': 'close',
 	'search.closeLabel': 'Close search',
+
+	'panel.name': 'the panel',
+	'panel.hide': 'Hide {name}',
+	'panel.show': 'Show {name}',
 }
