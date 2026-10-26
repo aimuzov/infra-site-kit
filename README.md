@@ -324,6 +324,8 @@ The "Что нового" page: what changed on the site in the reader's words, 
 - An entry is `{ "version", "date", "title", "icon", "items" }`, newest first; a link inside an item is `[text](/path/)`. A release with nothing the reader would notice gets `{ "version", "hidden": true }`: it ships, the page skips it.
 - The `check` action runs `site-changelog verify` after the build: the format, an entry for the version in `package.json` (release-please bumps it in the release PR) and every link leading to a page in `dist`.
 - `site-changelog context` prints what an entry is written from: the guide, the `CHANGELOG.md` section, the PR descriptions (via `gh`), the diff since the last tag, the pages of the build and the recent entries. `site-changelog add entry.json` puts the entry on top, verifies the file and formats it with the site's Prettier.
+- An app keeps its changelog in its own repo, and its landing page reads the file at build. The settings go into `changelog.config.json` in place of `package.json`, which a Swift app has none of, and the version comes from `.release-please-manifest.json`. The app's CI runs `npx -y --package=github:aimuzov/infra-site-kit site-changelog verify` on the release PR. The app has no build, so its site paths wait for the site, and a link outside the site must be `https`.
+- For two languages set `"locales": ["ru", "en"]`. Each entry then writes `title` and `items` per language, `{ "ru": ..., "en": ... }`, `verify` wants all of them, and the page shows its own locale, falling back to Russian.
 
 ```astro
 ---
@@ -342,7 +344,7 @@ import Base from '#frontend/layouts/base.astro'
 
 - Props: `releases`, `icons` (SVG by icon name), `title` (`false` when the site draws its own `<h1>`), `lead`, `toc` (the table of contents label, `false` drops it), `versionLabel`, `locale`. The `hero` slot goes under the lead.
 - The site theme comes through custom properties: `--changelog-accent`, `--changelog-muted`, `--changelog-width`, `--changelog-padding`, `--changelog-sticky-top`.
-- `changelog.js` is the same logic without markup, for a site with its own page: `itemHtml`, `releaseDate`, `releaseId`, `visibleReleases` and `releaseErrors`.
+- `changelog.js` is the same logic without markup, for a site with its own page: `itemHtml`, `releaseDate`, `releaseId`, `visibleReleases`, `releaseErrors`, and `localized`/`localizeRelease` for entries in two languages.
 
 ## E2E tests
 

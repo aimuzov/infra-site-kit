@@ -1,13 +1,16 @@
+/** Текст на все языки сразу или по языкам: `{ ru, en }`. */
+export type Localized<T> = T | Record<string, T>
+
 /** Запись ченжлога, которую видит читатель. */
 export type VisibleRelease = {
 	version: string
 	/** `YYYY-MM-DD`, как в CHANGELOG.md. */
 	date: string
-	title: string
+	title: Localized<string>
 	/** Имя иконки: экспорт lucide-static (`Goal`) или своя иконка сайта. */
 	icon?: string
-	/** Пункты; ссылка внутри -- `[текст](/путь/)`. */
-	items: string[]
+	/** Пункты; ссылка внутри -- `[текст](/путь/)` или `[текст](https://…)`. */
+	items: Localized<string[]>
 	hidden?: false
 }
 
@@ -35,8 +38,20 @@ export function releaseDate(date: string, locale?: string): string
 /** Якорь раздела релиза: `v1-12-0` из `1.12.0`. */
 export function releaseId(version: string): string
 
+/** Текст на языке страницы: нужный язык, без него русский, без русского первый. */
+export function localized<T>(value: Localized<T>, lang?: string): T
+
+/** Запись на языке страницы. */
+export function localizeRelease(
+	release: VisibleRelease,
+	lang?: string,
+): Omit<VisibleRelease, 'title' | 'items'> & { title: string; items: string[] }
+
+/** Пункты записи на всех её языках. */
+export function releaseItems(release: VisibleRelease): string[]
+
 /** Записи без скрытых. */
 export function visibleReleases<T extends { hidden?: boolean }>(releases: T[]): Exclude<T, { hidden: boolean }>[]
 
 /** Ошибки формата записей; пустой массив -- всё в порядке. */
-export function releaseErrors(releases: unknown, options?: { icons?: string[] }): string[]
+export function releaseErrors(releases: unknown, options?: { icons?: string[]; locales?: string[] }): string[]

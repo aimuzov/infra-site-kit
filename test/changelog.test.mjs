@@ -1,7 +1,17 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { itemHtml, itemLinks, releaseDate, releaseErrors, releaseId, visibleReleases } from '../site/changelog.js'
+import {
+	itemHtml,
+	itemLinks,
+	localized,
+	localizeRelease,
+	releaseDate,
+	releaseErrors,
+	releaseId,
+	releaseItems,
+	visibleReleases,
+} from '../site/changelog.js'
 
 const release = (version, date, extra = {}) => ({ version, date, title: 'Заголовок', items: ['Пункт'], ...extra })
 
@@ -72,4 +82,39 @@ test('releaseErrors catches broken entries', () => {
 	])
 
 	assert.deepEqual(releaseErrors({}), ['the changelog must be an array of releases'])
+})
+
+test("localized picks the page's language, then Russian, then any", () => {
+	assert.equal(localized('Один'), 'Один')
+	assert.equal(localized({ ru: 'Новое', en: 'New' }, 'en'), 'New')
+	assert.equal(localized({ ru: 'Новое', en: 'New' }, 'de'), 'Новое')
+	assert.equal(localized({ en: 'New' }), 'New')
+	assert.deepEqual(localized(['a'], 'en'), ['a'])
+})
+
+test('localizeRelease gives the title and items in one language', () => {
+	const r = release('1.0.0', '2026-01-01', { title: { ru: 'Т', en: 'T' }, items: { ru: ['П'], en: ['I'] } })
+
+	assert.deepEqual(localizeRelease(r, 'en'), { ...r, title: 'T', items: ['I'] })
+	assert.deepEqual(releaseItems(r), ['П', 'I'])
+	assert.deepEqual(releaseItems(release('1.0.0', '2026-01-01')), ['Пункт'])
+})
+
+test('releaseErrors checks every language and the required ones', () => {
+	const errors = releaseErrors(
+		[
+			release('1.1.0', '2026-01-02', { title: { ru: 'Т', en: ' ' }, items: { ru: ['П'], en: [] } }),
+			release('1.0.0', '2026-01-01', { title: { ru: 'Т' }, items: { ru: ['П'] } }),
+		],
+		{ locales: ['ru', 'en'] },
+	)
+
+	assert.deepEqual(errors, [
+		'1.1.0: title.en is empty',
+		'1.1.0: items.en must be a non-empty list of strings',
+		'1.0.0: title has no en version',
+		'1.0.0: items has no en version',
+	])
+
+	assert.deepEqual(releaseErrors([release('1.0.0', '2026-01-01', { title: { ru: 'Т' } })]), [])
 })

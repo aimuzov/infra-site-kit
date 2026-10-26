@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// site-changelog verify          -- проверка ченжлога сайта (CI после сборки)
+// site-changelog verify          -- проверка ченжлога сайта или приложения (CI)
 // site-changelog context         -- всё, что нужно для записи текущей версии, в Markdown
 // site-changelog add <entry.json> -- запись в начало ченжлога с проверкой
 import { readFileSync } from 'node:fs'
@@ -18,7 +18,7 @@ const fail = (errors) => {
 switch (command) {
 	case 'verify': {
 		if (!readConfig(cwd)) {
-			console.log('changelog: the site keeps no changelog, nothing to verify')
+			console.log('changelog: no changelog is set up here, nothing to verify')
 			break
 		}
 

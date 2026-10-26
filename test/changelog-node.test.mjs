@@ -43,8 +43,51 @@ test('readConfig takes true, a path or an object and returns null without the fi
 		file: 'a.json',
 		guide: 'changelog.guide.md',
 		icons: ['X'],
+		locales: [],
 		version: '1.1.0',
 	})
+})
+
+/** Приложение: без package.json, с changelog.config.json и манифестом release-please. */
+function app({ version = '0.2.0', releases, locales } = {}) {
+	const cwd = mkdtempSync(join(tmpdir(), 'app-changelog-'))
+
+	writeFileSync(join(cwd, 'changelog.config.json'), JSON.stringify({ file: 'changelog.json', locales }))
+	writeFileSync(join(cwd, '.release-please-manifest.json'), JSON.stringify({ '.': version }))
+
+	if (releases) writeFileSync(join(cwd, 'changelog.json'), JSON.stringify(releases))
+
+	return cwd
+}
+
+test('readConfig of an app takes changelog.config.json and the release-please version', () => {
+	assert.deepEqual(readConfig(app({ locales: ['ru', 'en'] })), {
+		file: 'changelog.json',
+		guide: 'changelog.guide.md',
+		icons: [],
+		locales: ['ru', 'en'],
+		version: '0.2.0',
+	})
+})
+
+test('verifyChangelog of an app wants every language and lets links leave the site', () => {
+	const both = {
+		title: { ru: 'Т', en: 'T' },
+		items: { ru: ['[Релиз](https://github.com/x/y) и [страница](/install/)'], en: ['[odd](mailto:a@b)'] },
+	}
+
+	assert.deepEqual(
+		verifyChangelog(app({ locales: ['ru', 'en'], releases: [{ ...entry('0.2.0', '2026-10-26'), ...both }] })),
+		['0.2.0: mailto:a@b is neither a site path nor an https link'],
+	)
+
+	assert.deepEqual(verifyChangelog(app({ locales: ['ru', 'en'], releases: [entry('0.2.0', '2026-10-26')] })), [])
+	assert.deepEqual(
+		verifyChangelog(
+			app({ locales: ['ru', 'en'], releases: [{ ...entry('0.2.0', '2026-10-26'), title: { ru: 'Т' } }] }),
+		),
+		['0.2.0: title has no en version'],
+	)
 })
 
 test('verifyChangelog wants an entry for the package version', () => {
@@ -60,7 +103,7 @@ test('verifyChangelog checks links against the build', () => {
 		releases: [entry('1.1.0', '2026-01-02', ['[О сайте](/about/#a) и [нет](/nope/), [внешняя](https://x.y)'])],
 	})
 
-	assert.deepEqual(verifyChangelog(cwd), ['1.1.0: /nope/ leads to no page', '1.1.0: https://x.y is not a site path'])
+	assert.deepEqual(verifyChangelog(cwd), ['1.1.0: /nope/ leads to no page'])
 	assert.deepEqual(verifyChangelog(cwd, { dist: 'missing' }), [])
 })
 

@@ -324,6 +324,8 @@ import Base from '#frontend/layouts/base.astro'
 - Запись -- `{ "version", "date", "title", "icon", "items" }`, новые сверху; ссылка внутри пункта -- `[текст](/путь/)`. Релиз, в котором читатель ничего не заметит, получает `{ "version", "hidden": true }`: он выкатывается, страница его пропускает.
 - Action `check` после сборки запускает `site-changelog verify`: формат, запись для версии из `package.json` (release-please поднимает её в релизном PR) и что каждая ссылка ведёт на страницу в `dist`.
 - `site-changelog context` печатает, из чего пишется запись: правила сайта, секцию `CHANGELOG.md`, описания PR (через `gh`), diff с прошлого тега, страницы сборки и последние записи. `site-changelog add entry.json` ставит запись в начало, проверяет файл и форматирует его Prettier сайта.
+- Приложение ведёт ченжлог в своём репо, а его лендинг берёт файл при сборке. Настройка лежит в `changelog.config.json` вместо `package.json`, которого у приложения на Swift нет, а версия берётся из `.release-please-manifest.json`. CI приложения запускает на релизном PR `npx -y --package=github:aimuzov/infra-site-kit site-changelog verify`. Своей сборки у приложения нет, поэтому его пути проверит уже сайт, а ссылка наружу должна быть `https`.
+- Для двух языков задайте `"locales": ["ru", "en"]`. Тогда `title` и `items` каждой записи пишутся по языкам, `{ "ru": ..., "en": ... }`, `verify` требует их все, а страница показывает язык своей локали, без него русский.
 
 ```astro
 ---
@@ -342,7 +344,7 @@ import Base from '#frontend/layouts/base.astro'
 
 - Props: `releases`, `icons` (SVG по имени иконки), `title` (`false`, если `<h1>` рисует сайт), `lead`, `toc` (подпись оглавления, `false` убирает его), `versionLabel`, `locale`. Слот `hero` идёт под абзацем.
 - Тема сайта приходит CSS-переменными: `--changelog-accent`, `--changelog-muted`, `--changelog-width`, `--changelog-padding`, `--changelog-sticky-top`.
-- `changelog.js` -- та же логика без разметки, для сайта со своей страницей: `itemHtml`, `releaseDate`, `releaseId`, `visibleReleases` и `releaseErrors`.
+- `changelog.js` -- та же логика без разметки, для сайта со своей страницей: `itemHtml`, `releaseDate`, `releaseId`, `visibleReleases`, `releaseErrors` и `localized`/`localizeRelease` для записей на двух языках.
 
 ## E2E-тесты
 
