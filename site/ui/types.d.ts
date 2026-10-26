@@ -128,3 +128,9 @@ export type LangSwitchProps = {
 	/** Язык без префикса в адресе, если это не русский. */
 	defaultLocale?: string
 }
+
+/**
+ * Вызов из Astro: он передаёт компоненту props вместе с `client:*` первым аргументом,
+ * а сигнатура `Component` из Svelte ждёт первым служебный аргумент.
+ */
+export type AstroComponent<Props> = (props: Props & { [directive: `client:${string}`]: unknown }) => unknown
