@@ -2,7 +2,7 @@
 	"name": "@aimuzov/infra-site-kit",
 	"version": "5.1.0",
 	"private": true,
-	"description": "Shared Prettier, Stylelint, oxlint and Playwright configs, the author credit, the not-found page, the theme switch and peek, shared Svelte UI parts with a file dropzone, the base root styles, Yandex Metrika and the reader changelog for the aimuzov sites",
+	"description": "Shared Prettier, Stylelint, oxlint and Playwright configs, the author credit, the not-found page, the theme switch and peek, shared Svelte UI parts with a file dropzone and site search, the base root styles, Yandex Metrika and the reader changelog for the aimuzov sites",
 	"license": "MIT",
 	"repository": "github:aimuzov/infra-site-kit",
 	"type": "module",
@@ -91,7 +91,7 @@
 		"format": "prettier --write .",
 		"format:check": "prettier --check .",
 		"test": "node --import ./test/svelte-register.mjs --test 'test/*.test.mjs'",
-		"test:e2e": "vite build -c test/ui/vite.config.mjs && playwright test"
+		"test:e2e": "vite build -c test/ui/vite.config.mjs && pagefind --site test/ui/dist --silent && playwright test"
 	},
 	"dependencies": {
 		"@axe-core/playwright": "4.13.0",
@@ -117,6 +117,7 @@
 		"@playwright/test": "1.64.0",
 		"@sveltejs/vite-plugin-svelte": "7.3.1",
 		"oxlint": "1.87.0",
+		"pagefind": "1.5.2",
 		"prettier": "3.9.9",
 		"stylelint": "17.16.0",
 		"svelte": "5.57.2",

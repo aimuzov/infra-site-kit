@@ -145,3 +145,16 @@ export type ThemeToggleProps = {
 	/** Круг с другой темой вокруг кнопки. В выпадающем меню он мешает. */
 	peek?: boolean
 }
+
+export type SearchProps = {
+	/** Язык подписей. */
+	locale?: string
+	/** Где лежит индекс Pagefind, по умолчанию `/pagefind/` в корне сайта. */
+	bundle?: string
+	/** Сколько страниц показывать, у каждой до трёх разделов. */
+	limit?: number
+	/** Открывать поиск по Cmd/Ctrl-K и `/`. */
+	shortcut?: boolean
+	/** Срезать `.html` в адресах: для хостинга, который отдаёт `/page` по `page.html`. */
+	trimHtml?: boolean
+}

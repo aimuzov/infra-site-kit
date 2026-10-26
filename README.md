@@ -31,6 +31,7 @@ Shared CI, linter and e2e configs for the aimuzov sites built from [infra-site-t
 - [**Theme peek**](#theme-peek): a theme button that shows the other scheme in a circle around itself.
 - [**Base styles**](#base-styles): the root defaults, a steady scrollbar gutter and no tap highlight.
 - [**UI parts**](#ui-parts): Svelte buttons, cards, fields, alerts and a file dropzone on tokens a site maps to its palette.
+- [**Search**](#search) on Pagefind: a header button, a results dialog and keyboard shortcuts.
 - [**Yandex Metrika**](#yandex-metrika) that loads after the first interaction and brings its own CSP sources.
 - [**Not-found page**](#not-found-page) with the author's face and suggestions from the sitemap.
 - [**Reader changelog**](#reader-changelog): the "Что нового" page, its format and the release PR check.
@@ -240,6 +241,29 @@ import '../styles/global.css' /* :root { --ui-bg: var(--bg); --ui-primary: var(-
 The dropzone takes a file by drag and drop, by click and from the keyboard, checks its type against `accept` (dragging skips the dialog filter) and its size against `maxSize`, and says why a file did not fit. Its `pick()` opens the same dialog from a button elsewhere, for "Replace" next to a result. `ui/files.js` holds that check for the site's own use.
 
 The styles are plain CSS nesting with full class names, so the parts need no PostCSS plugins of the site. The props are typed in `*.svelte.d.ts`.
+
+## Search
+
+`ui/search.svelte` is site search on [Pagefind](https://pagefind.app): a magnifier button for the header and a dialog with the results. It opens by the button, Cmd/Ctrl-K and `/`; arrows move through the results, Enter opens one, Esc closes. A page with sections shows up to three of them, each linking right to its heading. It reads the `--ui-*` tokens like the other parts in `ui/`.
+
+The index is built from the finished build, one per language by `<html lang>`, and the browser loads it in chunks only on the first search. The site installs `pagefind` itself and runs it after the build:
+
+```json
+"build": "astro build && pagefind --site dist"
+```
+
+```astro
+---
+import Search from '@aimuzov/infra-site-kit/ui/search.svelte'
+---
+
+<Search client:load locale="ru" />
+```
+
+- Pagefind compiles its index from WebAssembly, so a site with a strict CSP needs `'wasm-unsafe-eval'` in `script-src`: in Astro that is `scriptDirective: { resources: ["'self'", "'wasm-unsafe-eval'"] }`.
+- `astro dev` has no index, and the dialog says so. Try search in `astro build && pagefind --site dist && astro preview`.
+- The site marks what to index: `data-pagefind-body` on the main content, `data-pagefind-ignore` on the header and menus. Without marks the whole page goes in.
+- `bundle` is the index folder when the site does not live at the root. `limit` is how many pages to show. `shortcut={false}` turns the keys off. `trimHtml` drops `.html` from result links, for a host that serves `/page` from `page.html`; `index.html` is always dropped.
 
 ## Yandex Metrika
 
