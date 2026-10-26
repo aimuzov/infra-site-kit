@@ -9,6 +9,7 @@
 	import Field from '../../site/ui/field.svelte'
 	import Input from '../../site/ui/input.svelte'
 	import LangSwitch from '../../site/ui/lang-switch.svelte'
+	import PanelToggle from '../../site/ui/panel-toggle.svelte'
 	import Search from '../../site/ui/search.svelte'
 	import Skeleton from '../../site/ui/skeleton.svelte'
 	import { pickFile } from '../../site/ui/files.js'
@@ -24,7 +25,9 @@
 	<div style="display: flex; gap: 0.5rem; justify-content: flex-end">
 		<Search bundle="/ui/pagefind/" />
 		<LangSwitch locale="ru" path="/ui/" />
+		<PanelToggle panel="demo" controls="stand-panel" side="right" name="оглавление" prefix="stand" />
 	</div>
+	<aside id="stand-panel">Панель стенда</aside>
 	<Card title="Выгрузка" info="Справка о выгрузке">
 		{#snippet action()}<ChipButton onclick={() => zone.pick()}>Заменить</ChipButton>{/snippet}
 		<Dropzone bind:this={zone} accept=".json,application/json" maxSize={1024} note="result.json" onfile={(file) => (taken = file.name)} />

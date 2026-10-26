@@ -205,6 +205,52 @@ export async function expectThemePeek(page, button, { path = '/' } = {}) {
 }
 
 /**
+ * Проверяет кнопку скрываемой панели из `ui/panel-toggle.svelte`: она прячет панель,
+ * выбор переживает перезагрузку и ставится до отрисовки через `PanelsBoot`, а второй
+ * клик возвращает панель. Имя панели и то, что она прячет, берутся из самой кнопки.
+ *
+ * Как выглядит скрытая панель, у каждого сайта своё, это он проверяет сам.
+ *
+ * @param {Page} page
+ * @param {Locator} button
+ * @param {{ path?: string }} [options]
+ */
+export async function expectPanelToggle(page, button, { path = '/' } = {}) {
+	await page.goto(path)
+
+	const panel = await button.getAttribute('data-panel')
+	const controls = await button.getAttribute('aria-controls')
+	const root = page.locator('html')
+	const attr = `data-panel-${panel}`
+	/** Значение для селектора атрибута в кавычках. */
+	const quoted = (/** @type {string | null} */ value) => `"${String(value).replace(/["\\]/g, '\\$&')}"`
+
+	// Подпись кнопки меняется со «Скрыть» на «Показать», а кнопок у панели может быть несколько,
+	// поэтому дальше кнопка ищется по месту среди кнопок своей панели: оно не меняется и после перезагрузки.
+	const siblings = page.locator(`button[data-panel=${quoted(panel)}]`)
+	const index = await button.evaluate((node, all) => all.indexOf(node), await siblings.elementHandles())
+
+	button = siblings.nth(index)
+
+	// id может быть любым, `#id` споткнулся бы о двоеточие или точку в нём.
+	await expect(page.locator(`[id=${quoted(controls)}]`), 'aria-controls points nowhere').toHaveCount(1)
+	await expect(button).toHaveAttribute('aria-expanded', 'true')
+
+	await button.click()
+	await expect(button).toHaveAttribute('aria-expanded', 'false')
+	await expect(root).toHaveAttribute(attr, 'hidden')
+
+	// После перезагрузки атрибут ставит только скрипт до отрисовки: кнопка его лишь читает.
+	await page.reload()
+	await expect(root, 'the hidden panel is lost on reload').toHaveAttribute(attr, 'hidden')
+	await expect(button).toHaveAttribute('aria-expanded', 'false')
+
+	await button.click()
+	await expect(button).toHaveAttribute('aria-expanded', 'true')
+	await expect(root).not.toHaveAttribute(attr, 'hidden')
+}
+
+/**
  * Проверяет, что Яндекс Метрика ждёт посетителя: счётчик на странице есть, но `tag.js`
  * не запрашивается до первого взаимодействия, а сразу после него запрашивается.
  *

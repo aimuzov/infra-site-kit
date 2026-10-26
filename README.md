@@ -32,6 +32,7 @@ Shared CI, linter and e2e configs for the aimuzov sites built from [infra-site-t
 - [**Base styles**](#base-styles): the root defaults, a steady scrollbar gutter and no tap highlight.
 - [**UI parts**](#ui-parts): Svelte buttons, cards, fields, alerts and a file dropzone on tokens a site maps to its palette.
 - [**Search**](#search) on Pagefind: a header button, a results dialog and keyboard shortcuts.
+- [**Collapsible panels**](#collapsible-panels): a button that hides a sidebar and a script that keeps the choice before the first paint.
 - [**Yandex Metrika**](#yandex-metrika) that loads after the first interaction and brings its own CSP sources.
 - [**Not-found page**](#not-found-page) with the author's face and suggestions from the sitemap.
 - [**Reader changelog**](#reader-changelog): the "Что нового" page, its format and the release PR check.
@@ -264,6 +265,39 @@ import Search from '@aimuzov/infra-site-kit/ui/search.svelte'
 - `astro dev` has no index, and the dialog says so. Try search in `astro build && pagefind --site dist && astro preview`.
 - The site marks what to index: `data-pagefind-body` on the main content, `data-pagefind-ignore` on the header and menus. Without marks the whole page goes in.
 - `bundle` is the index folder when the site does not live at the root. `limit` is how many pages to show. `shortcut={false}` turns the keys off. `trimHtml` drops `.html` from result links, for a host that serves `/page` from `page.html`; `index.html` is always dropped.
+
+## Collapsible panels
+
+Page sidebars (a section tree, a table of contents, a comments panel) get a button that hides them, and the choice stays on the device. The kit keeps the state and the button; the site folds its own layout, since for one site a panel is a grid column and for another a `position: fixed` block.
+
+A hidden panel is marked on the root with `data-panel-<name>="hidden"`, its localStorage key is `<prefix>:panel-<name>`. `PanelsBoot` in `<head>` sets the attributes before the first paint, like `ThemeBoot`, so panels do not flash on load. It is a same-origin file the CSP lets through by `'self'`.
+
+```astro
+---
+import PanelsBoot from '@aimuzov/infra-site-kit/panels-boot.astro'
+import PanelToggle from '@aimuzov/infra-site-kit/ui/panel-toggle.svelte'
+---
+
+<head>
+	<PanelsBoot panels={['toc']} prefix="site" />
+</head>
+
+<aside>
+	<PanelToggle client:load panel="toc" controls="toc" name="the contents" locale="en" prefix="site" />
+	<nav id="toc">…</nav>
+</aside>
+```
+
+```css
+:root[data-panel-toc='hidden'] #toc {
+	display: none;
+}
+```
+
+- The button has `aria-expanded`, `aria-controls` and a "Hide …" / "Show …" label built from `name`. `side` picks the icon: `left` or `right`.
+- The site sets the folding animation and turns it off for `prefers-reduced-motion`. It keeps the hidden-panel rules inside its breakpoints, so narrow screens where panels are hidden anyway stay intact.
+- `togglePanel`, `setPanelHidden`, `isPanelHidden` and `watchPanel` from `panels.js` are there for a button or key of the site's own.
+- `expectPanelToggle(page, button, { path })` from the kit checks: the button hides the panel, the choice survives a reload, a second click brings it back.
 
 ## Yandex Metrika
 

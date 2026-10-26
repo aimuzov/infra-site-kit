@@ -52,6 +52,12 @@ export function expectThemeToggle(page: Page, button: Locator, options?: ThemeOp
 export function expectThemePeek(page: Page, button: Locator, options?: { path?: string }): Promise<void>
 
 /**
+ * Кнопка `ui/panel-toggle.svelte` прячет панель, выбор переживает перезагрузку
+ * через `PanelsBoot`, второй клик возвращает панель.
+ */
+export function expectPanelToggle(page: Page, button: Locator, options?: { path?: string }): Promise<void>
+
+/**
  * Проверяет, что Яндекс Метрика есть на странице,
  * но `tag.js` грузится только после первого взаимодействия.
  */

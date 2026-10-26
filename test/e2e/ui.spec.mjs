@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test'
 
+import { expectPanelToggle } from '../../playwright/checks.mjs'
+
 // Компоненты `ui/` на стенде из `test/ui`: то, что видно только в браузере, --
 // перетаскивание, выбор файла с клавиатуры, проверка типа и размера, подсказка.
 
@@ -153,4 +155,16 @@ test('search opens by the button and by Cmd/Ctrl-K, finds a section and closes o
 	await expect(dialog).toBeVisible()
 	await input.fill('несуществующееслово')
 	await expect(dialog.getByRole('status')).toContainText('Ничего не нашлось')
+})
+
+test('the panel toggle hides its panel, keeps the choice over a reload and shows it back', async ({ page }) => {
+	const button = page.getByRole('button', { name: 'Скрыть оглавление' })
+	const panel = page.locator('#stand-panel')
+
+	await expectPanelToggle(page, button, { path: '/ui/' })
+	await expect(panel).toBeVisible()
+
+	await button.click()
+	await expect(panel).toBeHidden()
+	await expect(page.getByRole('button', { name: 'Показать оглавление' })).toHaveAttribute('aria-expanded', 'false')
 })

@@ -158,3 +158,18 @@ export type SearchProps = {
 	/** Срезать `.html` в адресах: для хостинга, который отдаёт `/page` по `page.html`. */
 	trimHtml?: boolean
 }
+
+export type PanelToggleProps = {
+	/** Имя панели, то же, что у `PanelsBoot`: по нему атрибут `data-panel-<имя>` на корне. */
+	panel: string
+	/** `id` элемента, который кнопка прячет. */
+	controls: string
+	/** С какой стороны панель, от этого иконка. */
+	side?: 'left' | 'right'
+	/** Что прячем, в винительном падеже: «оглавление». По умолчанию «панель». */
+	name?: string
+	/** Язык подписи. */
+	locale?: string
+	/** Префикс ключей в localStorage, тот же, что у `PanelsBoot`. */
+	prefix?: string
+}
