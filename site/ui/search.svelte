@@ -332,6 +332,11 @@
 		@media (pointer: coarse) {
 			font-size: max(1rem, 1em);
 		}
+
+		/* Свой крестик браузера встал бы рядом с кнопкой закрытия и путал бы с ней. */
+		&::-webkit-search-cancel-button {
+			appearance: none;
+		}
 	}
 
 	.search__note {
