@@ -58,6 +58,9 @@ test('text loses headers, named secrets, values of URL parameters and tokens', (
 		['password=hunter2 for ann', 'password=[Filtered] for ann'],
 		['{"access_token": "abc", "page": 2}', '{"access_token": "[Filtered]", "page": 2}'],
 		['Invalid session: 42', 'Invalid session: [Filtered]'],
+		// Значение в кавычках целиком, с пробелами и запятыми.
+		['{"password": "my secret phrase"}', '{"password": "[Filtered]"}'],
+		["secretAnswer='first pet, Rex' given", "secretAnswer='[Filtered]' given"],
 		// Пара внутри значения другой пары не прячется.
 		['{"error":"api_key=abc"}', '{"error":"api_key=[Filtered]"}'],
 		[`token ${signed}`, 'token [Filtered]'],
@@ -210,6 +213,7 @@ test('long text is scrubbed in linear time', () => {
 		'a :'.repeat(size / 3),
 		'Ab1'.repeat(size / 3),
 		`cookie${' '.repeat(size)}`,
+		'token:"'.repeat(size / 7),
 	]) {
 		scrubText(text)
 	}

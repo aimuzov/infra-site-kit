@@ -53,6 +53,26 @@ const JWT = /\beyJ[\w-]+\.[\w-]+(?:\.[\w-]+)?/g
 const WORD = /[\w-]{20,}/g
 
 /**
+ * Где кончается значение пары. В кавычках оно идёт до закрывающей, с пробелами и
+ * запятыми: пароль или ответ на секретный вопрос бывает из нескольких слов.
+ *
+ * @param text - Текст с парой.
+ * @param start - Начало значения.
+ * @param quote - Последний символ перед значением, открывающая кавычка или нет.
+ */
+function valueEnd(text, start, quote) {
+	if (`"'\``.includes(quote)) {
+		const close = text.indexOf(quote, start)
+
+		return close === -1 ? text.length : close
+	}
+
+	PAIR_VALUE.lastIndex = start
+
+	return PAIR_VALUE.test(text) ? PAIR_VALUE.lastIndex : start
+}
+
+/**
  * Пары с говорящим именем: `password=...`, `"access_token": "..."`. Значение ищется
  * только после такого имени, иначе `error: token=...` спрятал бы пару внутри
  * значения `error`.
@@ -64,13 +84,14 @@ function scrubPairs(text) {
 	let done = 0
 
 	for (const { 0: head, 1: name, index } of text.matchAll(PAIR_NAME)) {
-		PAIR_VALUE.lastIndex = index + head.length
+		if (index < done || !SECRET_KEY.test(name)) continue
 
-		const value = index >= done && SECRET_KEY.test(name) && PAIR_VALUE.exec(text)
+		const start = index + head.length
+		const end = valueEnd(text, start, head.at(-1))
 
-		if (value) {
-			result += text.slice(done, value.index) + FILTERED
-			done = PAIR_VALUE.lastIndex
+		if (end > start) {
+			result += text.slice(done, start) + FILTERED
+			done = end
 		}
 	}
 
