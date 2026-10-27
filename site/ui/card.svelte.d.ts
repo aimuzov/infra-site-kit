@@ -1,7 +1,7 @@
 import type { Component } from 'svelte'
 
-import type { CardProps } from './types.js'
+import type { AstroComponent, CardProps } from './types.js'
 
-declare const C: Component<CardProps>
+declare const C: AstroComponent<CardProps> & Component<CardProps>
 
 export default C

@@ -1,7 +1,7 @@
 import type { Component } from 'svelte'
 
-import type { SkeletonProps } from './types.js'
+import type { AstroComponent, SkeletonProps } from './types.js'
 
-declare const C: Component<SkeletonProps>
+declare const C: AstroComponent<SkeletonProps> & Component<SkeletonProps>
 
 export default C

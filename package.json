@@ -101,6 +101,7 @@
 	"scripts": {
 		"format": "prettier --write .",
 		"format:check": "prettier --check .",
+		"check": "astro check --root test/astro && svelte-check --workspace test/astro --fail-on-warnings",
 		"test": "node --import ./test/svelte-register.mjs --test 'test/*.test.mjs'",
 		"test:e2e": "vite build -c test/ui/vite.config.mjs && pagefind --site test/ui/dist --silent && playwright test"
 	},
@@ -125,14 +126,19 @@
 		"svelte": "^5.0.0"
 	},
 	"devDependencies": {
+		"@astrojs/check": "0.9.10",
+		"@astrojs/svelte": "9.0.1",
 		"@lucide/svelte": "1.39.0",
 		"@playwright/test": "1.64.0",
 		"@sveltejs/vite-plugin-svelte": "7.3.1",
+		"astro": "7.3.7",
 		"oxlint": "1.87.0",
 		"pagefind": "1.5.2",
 		"prettier": "3.9.9",
 		"stylelint": "17.16.0",
 		"svelte": "5.57.2",
+		"svelte-check": "4.7.6",
+		"typescript": "6.0.3",
 		"vite": "8.3.4"
 	},
 	"keywords": [

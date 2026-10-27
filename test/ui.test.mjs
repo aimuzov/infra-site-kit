@@ -142,3 +142,15 @@ test('every ui component ships typings and uses only --ui- tokens', () => {
 
 	for (const target of ['./ui/*.svelte', './ui/tokens.css', './ui/files.js']) assert.ok(pkg.exports[target], target)
 })
+
+// Без сигнатуры для Astro `astro check` не пускает компонент на страницу, а svelte-check
+// берёт пропсы из последней сигнатуры, поэтому `Component` замыкает декларацию.
+test('every ui typing serves Astro first and Svelte last', () => {
+	const dir = join(root, 'site/ui')
+
+	for (const file of readdirSync(dir).filter((name) => name.endsWith('.svelte.d.ts'))) {
+		const typing = readFileSync(join(dir, file), 'utf8')
+
+		assert.match(typing, /declare const C: AstroComponent<(\w+)> & Component<\1[,>]/, file)
+	}
+})

@@ -1,0 +1,38 @@
+---
+import Alert from '@aimuzov/infra-site-kit/ui/alert.svelte'
+import Badge from '@aimuzov/infra-site-kit/ui/badge.svelte'
+import Button from '@aimuzov/infra-site-kit/ui/button.svelte'
+import Card from '@aimuzov/infra-site-kit/ui/card.svelte'
+import ChipButton from '@aimuzov/infra-site-kit/ui/chip-button.svelte'
+import Dropzone from '@aimuzov/infra-site-kit/ui/dropzone.svelte'
+import ThemeToggle from '@aimuzov/infra-site-kit/ui/theme-toggle.svelte'
+
+import Panel from '../components/panel.svelte'
+
+// Пропсы проверяются и здесь: ошибку обязаны дать `tone` не из списка
+// и `client:*` у Dropzone. Сниппет `children` и необязательный `onclick`
+// тоже функции, но `client:*` они не запрещают.
+---
+
+<ThemeToggle client:load locale="en" />
+<Card title="Text">text</Card>
+<Card title="Markup" layout="row">
+	<ChipButton slot="action">more</ChipButton>
+	<p>first</p>
+	<p>second</p>
+</Card>
+<Badge mono>42</Badge>
+<Button variant="outline" type="submit">
+	Send
+</Button>
+<Alert variant="warning" title="Careful">
+	<p>text</p>
+</Alert>
+<Panel client:load />
+<Button client:load>Send</Button>
+<ChipButton client:load>more</ChipButton>
+<Card client:load title="Island">text</Card>
+{/* @ts-expect-error */}
+<Card tone="nope">text</Card>
+{/* @ts-expect-error */}
+<Dropzone client:load onfile={(file) => console.log(file.name)} />

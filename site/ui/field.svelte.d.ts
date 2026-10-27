@@ -1,7 +1,7 @@
 import type { Component } from 'svelte'
 
-import type { FieldProps } from './types.js'
+import type { AstroComponent, FieldProps } from './types.js'
 
-declare const C: Component<FieldProps>
+declare const C: AstroComponent<FieldProps> & Component<FieldProps>
 
 export default C

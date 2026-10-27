@@ -1,7 +1,7 @@
 import type { Component } from 'svelte'
 
-import type { BadgeProps } from './types.js'
+import type { AstroComponent, BadgeProps } from './types.js'
 
-declare const C: Component<BadgeProps>
+declare const C: AstroComponent<BadgeProps> & Component<BadgeProps>
 
 export default C

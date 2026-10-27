@@ -4,3 +4,6 @@ playwright-report
 
 # Сборка стенда компонентов для e2e.
 test/ui/dist
+
+# Типы, которые `astro check` генерирует для фикстуры.
+test/astro/.astro

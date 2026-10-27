@@ -1,7 +1,7 @@
 import type { Component } from 'svelte'
 
-import type { ChipButtonProps } from './types.js'
+import type { AstroComponent, ChipButtonProps } from './types.js'
 
-declare const C: Component<ChipButtonProps>
+declare const C: AstroComponent<ChipButtonProps> & Component<ChipButtonProps>
 
 export default C

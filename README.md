@@ -258,7 +258,21 @@ import '../styles/global.css' /* :root { --ui-bg: var(--bg); --ui-primary: var(-
 
 The dropzone takes a file by drag and drop, by click and from the keyboard, checks its type against `accept` (dragging skips the dialog filter) and its size against `maxSize`, and says why a file did not fit. Its `pick()` opens the same dialog from a button elsewhere, for "Replace" next to a result. `ui/files.js` holds that check for the site's own use.
 
-The styles are plain CSS nesting with full class names, so the parts need no PostCSS plugins of the site. The props are typed in `*.svelte.d.ts`.
+The styles are plain CSS nesting with full class names, so the parts need no PostCSS plugins of the site. The props are typed in `*.svelte.d.ts` for Svelte markup and an Astro page alike. On a page `astro check` takes the content between the tags as the default slot, and a named one, such as the card's `action`, goes in as its snippet:
+
+```astro
+---
+import Badge from '@aimuzov/infra-site-kit/ui/badge.svelte'
+import Card from '@aimuzov/infra-site-kit/ui/card.svelte'
+---
+
+<Card title="Upload">
+	<Badge slot="action">beta</Badge>
+	<p>The file stays on your device.</p>
+</Card>
+```
+
+A part with a required function prop, such as the dropzone with its `onfile`, takes no `client:*` on a page: Astro cannot hand a function to the browser. It comes to life inside a Svelte component, as in the Svelte example with the dropzone above.
 
 ## Search
 
@@ -522,13 +536,14 @@ Node comes from `engines` in [`package.json`](package.json). The same checks as 
 
 ```bash
 npm ci
-npm run format:check && npm test
+npm run format:check && npm run check && npm test
 npx playwright install chromium
 npm run test:e2e
 ```
 
 - Unit tests (`node --test`) run the configs against [`test/site`](test/site), which takes them by the package name the way a site does, and cover the credit year, the Metrika snippet, the Sentry boot, release and CSP, the theme peek math, the theme switch, the boot script and the current section line.
-- The kit has no Astro site, so e2e runs the shared checks against a two-page stand-in from [`test/e2e/server.mjs`](test/e2e/server.mjs): a sitemap with the production domain, a theme button with the peek and the deferred Metrika.
+- `npm run check` runs `astro check` and `svelte-check` against [`test/astro`](test/astro): the `ui/` parts on an Astro page with slots, in Svelte markup with snippets, and the props Svelte sees for each part.
+- The kit builds no Astro site, so e2e runs the shared checks against a two-page stand-in from [`test/e2e/server.mjs`](test/e2e/server.mjs): a sitemap with the production domain, a theme button with the peek and the deferred Metrika.
 
 ## Versions
 
