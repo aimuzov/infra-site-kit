@@ -45,13 +45,20 @@ const HEADER = /\b((?:set-)?cookie|(?:proxy-)?authorization)(["']?\s*[:=]\s*["'`
 const BEARER = /\b(Bearer\s+)[\w~+/.=-]+/gi
 // Имя пары берётся только с начала слова, иначе на длинной строке
 // без пар поиск квадратичен.
-const PAIR_NAME = /(?<![\w.-])([\w.-]+)["']?\s*[:=]\s*["'`]?/g
+const PAIR_NAME = /(?<![\w.-])([\w.-]+)(?:\\?["'])?\s*[:=]\s*(?:\\?["'`])?/g
 const PAIR_VALUE = /[^\s"'`,;&=]+/y
 // Значение в кавычках идёт до закрывающей, экранированные `\"` его не обрывают.
 const QUOTED = {
 	'"': /(?:\\[\s\S]|[^\\"])*/y,
 	"'": /(?:\\[\s\S]|[^\\'])*/y,
 	'`': /(?:\\[\s\S]|[^\\`])*/y,
+}
+// В строке, где экранированы сами кавычки (`{\"password\":\"...\"}`),
+// значение идёт до `\"`.
+const ESCAPED_QUOTED = {
+	'"': /(?:[^\\]|\\(?!"))*/y,
+	"'": /(?:[^\\]|\\(?!'))*/y,
+	'`': /(?:[^\\]|\\(?!`))*/y,
 }
 // Значения всех параметров адреса, в query и во фрагменте: `?q=...`, `#request=...`.
 const URL_PARAM = /([?&#][^\s?&#=<>"'`()]+=)[^\s&#<>"'`()]+/g
@@ -64,10 +71,10 @@ const WORD = /[\w-]{20,}/g
  *
  * @param text - Текст с парой.
  * @param start - Начало значения.
- * @param quote - Последний символ перед значением, открывающая кавычка или нет.
+ * @param head - Имя пары с разделителем и открывающей кавычкой, если она есть.
  */
-function valueEnd(text, start, quote) {
-	const value = QUOTED[quote] ?? PAIR_VALUE
+function valueEnd(text, start, head) {
+	const value = (head.at(-2) === '\\' ? ESCAPED_QUOTED : QUOTED)[head.at(-1)] ?? PAIR_VALUE
 
 	value.lastIndex = start
 
@@ -89,7 +96,7 @@ function scrubPairs(text) {
 		if (index < done || !SECRET_KEY.test(name)) continue
 
 		const start = index + head.length
-		const end = valueEnd(text, start, head.at(-1))
+		const end = valueEnd(text, start, head)
 
 		if (end > start) {
 			result += text.slice(done, start) + FILTERED
