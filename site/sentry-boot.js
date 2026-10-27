@@ -14,6 +14,9 @@ export const sentryOptions = ({ dsn, release, environment }) => ({
 	release,
 	environment,
 	sendDefaultPii: false,
+	// В SDK 11 сбор данных настраивается ещё и здесь, и по умолчанию он включён.
+	// User-Agent оставлен: по нему Sentry показывает браузер и систему.
+	dataCollection: { userInfo: false, cookies: false, httpHeaders: { allow: ['User-Agent'] }, urlQueryParams: false },
 	integrations: (defaults) => defaults.filter((integration) => integration.name !== 'BrowserSession'),
 })
 
@@ -31,9 +34,16 @@ export function bootSentry(config, { win = window, load = () => import('./sentry
 	for (const kind of kinds) win.addEventListener(kind, keep)
 
 	const start = async () => {
-		const { init, captureException } = await load()
+		// Чанк SDK может и не загрузиться, например после деплоя со старой вкладки.
+		// Тогда копить ошибки дальше незачем, а сама ошибка загрузки видна в консоли.
+		let sdk
+		try {
+			sdk = await load()
+		} finally {
+			for (const kind of kinds) win.removeEventListener(kind, keep)
+		}
 
-		for (const kind of kinds) win.removeEventListener(kind, keep)
+		const { init, captureException } = sdk
 		init(sentryOptions(config))
 
 		// Ранние ошибки помечаем так же, как пометил бы обработчик самого SDK.

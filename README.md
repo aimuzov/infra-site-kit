@@ -340,7 +340,7 @@ The site's `security.csp` keeps no Yandex sources: the component brings them onl
 
 ## Sentry
 
-Browser errors go to Sentry, nothing else: no tracing, replay or profiling, and `sendDefaultPii: false`, so no IP, cookies or headers of the visitor. Session tracking is off as well: a page talks to Sentry only when it has an error, not on every load. The release is `<name>@<version>` from the site's `package.json`, read at build time from the directory the build runs in; the environment is `production`.
+Browser errors go to Sentry, nothing else: no tracing, replay or profiling, and no data about the visitor: `sendDefaultPii: false` plus `dataCollection` with user info, cookies and URL query off and only the `User-Agent` header kept, so Sentry can still tell the browser and the OS. Session tracking is off as well: a page talks to Sentry only when it has an error, not on every load. The release is `<name>@<version>` from the site's `package.json`, read at build time from the directory the build runs in; the environment is `production`.
 
 `sentry.astro` goes into `<head>`, like `metrika.astro`, because it puts the ingest host of the DSN into `connect-src` of the page CSP. It renders nothing without a DSN and on the dev server, so such pages get no script at all. With a DSN it renders the config in `<meta name="sentry">` and a small module (~1 KB gzip). The module catches errors from the start and, after `load` when the browser is idle, imports the SDK (~30 KB gzip) as a chunk from the site itself, so `script-src 'self'` covers it. Errors caught before that are sent right after init, marked as unhandled.
 

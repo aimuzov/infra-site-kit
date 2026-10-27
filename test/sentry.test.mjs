@@ -75,10 +75,28 @@ test('errors before the SDK are sent after init as unhandled', async () => {
 	assert.equal(listeners.unhandledrejection, undefined)
 })
 
+test('a failed SDK load stops collecting errors', async () => {
+	const { win, listeners, idle } = page('complete')
+	const failed = new Error('chunk is gone')
+
+	bootSentry(config, { win, load: async () => Promise.reject(failed) })
+	listeners.error({ type: 'error', error: new Error('boom') })
+
+	await assert.rejects(idle[0](), failed)
+	assert.equal(listeners.error, undefined)
+	assert.equal(listeners.unhandledrejection, undefined)
+})
+
 test('the options turn on nothing but errors', () => {
 	const options = sentryOptions(config)
 
 	assert.equal(options.sendDefaultPii, false)
+	assert.deepEqual(options.dataCollection, {
+		userInfo: false,
+		cookies: false,
+		httpHeaders: { allow: ['User-Agent'] },
+		urlQueryParams: false,
+	})
 	for (const key of ['tracesSampleRate', 'replaysSessionSampleRate', 'profilesSampleRate']) {
 		assert.equal(key in options, false, key)
 	}
