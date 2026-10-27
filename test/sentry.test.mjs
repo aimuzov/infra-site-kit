@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
 
-import { bootSentry, sentryOptions } from '../site/sentry-boot.js'
+import { bootSentry, sentryOptions, stripFileQueries } from '../site/sentry-boot.js'
 import { parseDsn, sentryCsp, siteRelease } from '../site/sentry.js'
 
 const dsn = 'https://abc123@o42.ingest.us.sentry.io/7'
@@ -104,6 +104,24 @@ test('the options turn on nothing but errors', () => {
 	for (const key of ['tracesSampleRate', 'replaysSessionSampleRate', 'profilesSampleRate']) {
 		assert.equal(key in options, false, key)
 	}
+})
+
+test('file addresses in an event lose the query and the fragment', () => {
+	const page = 'https://site.example/page?token=1#top'
+	const event = {
+		exception: {
+			values: [{ stacktrace: { frames: [{ filename: page, abs_path: page }, { filename: '<anonymous>' }] } }],
+		},
+		debug_meta: { images: [{ code_file: page }] },
+	}
+
+	assert.equal(sentryOptions(config).beforeSend, stripFileQueries)
+	const [frame, anonymous] = stripFileQueries(event).exception.values[0].stacktrace.frames
+	assert.equal(frame.filename, 'https://site.example/page')
+	assert.equal(frame.abs_path, 'https://site.example/page')
+	assert.equal(anonymous.filename, '<anonymous>')
+	assert.equal(event.debug_meta.images[0].code_file, 'https://site.example/page')
+	assert.deepEqual(stripFileQueries({ message: 'plain' }), { message: 'plain' })
 })
 
 test('the options drop session tracking, so a page load alone sends nothing', () => {

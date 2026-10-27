@@ -2,6 +2,29 @@
 // и первой картинкой, поэтому он грузится отдельным чанком после load, когда браузер
 // свободен. Ошибки до этого момента копятся и уходят сразу после инициализации.
 
+const withoutQuery = (url) => url.replace(/[?#].*/, '')
+
+/**
+ * Убирает query и фрагмент из адресов файлов в событии. `urlQueryParams` их
+ * не трогает, а у ошибки из инлайн-скрипта файл -- это адрес самой страницы.
+ *
+ * @param event - Событие Sentry перед отправкой.
+ */
+export function stripFileQueries(event) {
+	for (const exception of event.exception?.values ?? []) {
+		for (const frame of exception.stacktrace?.frames ?? []) {
+			if (frame.filename) frame.filename = withoutQuery(frame.filename)
+			if (frame.abs_path) frame.abs_path = withoutQuery(frame.abs_path)
+		}
+	}
+
+	for (const image of event.debug_meta?.images ?? []) {
+		if (image.code_file) image.code_file = withoutQuery(image.code_file)
+	}
+
+	return event
+}
+
 /**
  * Опции `Sentry.init`: только ошибки, без трейсинга, реплеев и профилирования,
  * и без данных посетителя. Сессии тоже выключены: иначе SDK
@@ -24,6 +47,7 @@ export const sentryOptions = ({ dsn, release, environment }) => ({
 		genAI: { inputs: false, outputs: false },
 		stackFrameVariables: false,
 	},
+	beforeSend: stripFileQueries,
 	integrations: (defaults) => defaults.filter((integration) => integration.name !== 'BrowserSession'),
 })
 
