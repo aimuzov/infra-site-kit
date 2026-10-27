@@ -15,6 +15,7 @@ import Dropzone from '../site/ui/dropzone.svelte'
 import Field from '../site/ui/field.svelte'
 import InfoTip from '../site/ui/info-tip.svelte'
 import Input from '../site/ui/input.svelte'
+import Search from '../site/ui/search.svelte'
 import Skeleton from '../site/ui/skeleton.svelte'
 import { formatSize, matchesAccept, rejectFile } from '../site/ui/files.js'
 
@@ -106,6 +107,23 @@ test('dropzone hides the file input behind a keyboard-reachable zone', () => {
 	assert.match(body, /dropzone--error/)
 	assert.match(body, /role="alert">Сервер занят</)
 	assert.match(html(Dropzone, { onfile() {}, disabled: true }), /tabindex="-1"[^>]*aria-disabled="true"/)
+})
+
+test('search leaves out its buttons and takes the prompt and labels of a site with its own', () => {
+	const own = html(Search, {
+		locale: 'en',
+		button: false,
+		closeButton: false,
+		prompt: text('/'),
+		strings: { en: { 'search.placeholder': 'Search docs' } },
+	})
+
+	assert.match(html(Search, {}), /class="search-button/)
+	assert.match(html(Search, {}), /class="search__close/)
+	assert.doesNotMatch(own, /search-button|search__close|search__icon/)
+	assert.match(own, /<span>\/<\/span>/)
+	assert.match(own, /placeholder="Search docs"/)
+	assert.match(own, /aria-label="Search the site"/)
 })
 
 test('every ui component ships typings and uses only --ui- tokens', () => {

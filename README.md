@@ -296,6 +296,22 @@ import Search from '@aimuzov/infra-site-kit/ui/search.svelte'
 - `astro dev` has no index, and the dialog says so. Try search in `astro build && pagefind --site dist && astro preview`.
 - The site marks what to index: `data-pagefind-body` on the main content, `data-pagefind-ignore` on the header and menus. Without marks the whole page goes in.
 - `bundle` is the index folder when the site does not live at the root. `limit` is how many pages to show. `shortcut={false}` turns the keys off. `trimHtml` drops `.html` from result links, for a host that serves `/page` from `page.html`; `index.html` is always dropped.
+- A site with its own header button sets `button={false}` and opens the dialog with `open()`, and `onclose` tells it the dialog closed. `shortcut={false}` leaves the keys to a site that catches them itself.
+- `strings` are the site's own labels over the shared ones, per language, as in `t()`. The `prompt` snippet puts the site's own prompt at the start of the line instead of the magnifier, and `empty` its own "nothing found". `closeButton={false}` drops the close button, and the browser's own clear button empties the field. `vimKeys` adds Ctrl-j/k and Ctrl-n/p to the arrows, in any keyboard layout.
+- Besides the `--ui-*` tokens, the dialog has variables of its own, and their defaults give the current look: `--ui-search-top` is the gap above it, `--ui-backdrop` the backdrop, `--ui-search-title` and `--ui-search-text` the colour of titles and excerpts. `--ui-search-hit-border` gives a result a border of that width, coloured `--ui-hover-border` on the selected one. The key hints are rounded no more than menu items.
+
+```svelte
+<script>
+	import Search from '@aimuzov/infra-site-kit/ui/search.svelte'
+
+	let search
+</script>
+
+<button type="button" onclick={() => search.open()}>Search</button>
+<Search bind:this={search} locale="en" button={false} vimKeys>
+	{#snippet prompt()}<span class="prompt">/</span>{/snippet}
+</Search>
+```
 
 ## Collapsible panels
 
