@@ -1,8 +1,8 @@
 {
 	"name": "@aimuzov/infra-site-kit",
-	"version": "5.5.0",
+	"version": "5.6.0",
 	"private": true,
-	"description": "Shared Prettier, Stylelint, oxlint and Playwright configs, the author credit, the not-found page, the theme switch and peek, shared Svelte UI parts with a file dropzone, site search and collapsible panels, the current section spy for tables of contents, the base root styles, Yandex Metrika and the reader changelog for the aimuzov sites",
+	"description": "Shared Prettier, Stylelint, oxlint and Playwright configs, the author credit, the not-found page, the theme switch and peek, shared Svelte UI parts with a file dropzone, site search and collapsible panels, the current section spy for tables of contents, the base root styles, Yandex Metrika, Sentry error monitoring and the reader changelog for the aimuzov sites",
 	"license": "MIT",
 	"repository": "github:aimuzov/infra-site-kit",
 	"type": "module",
@@ -58,6 +58,7 @@
 		"./locale-boot.astro": "./site/locale-boot.astro",
 		"./metrika.astro": "./site/metrika.astro",
 		"./metrika-pixel.astro": "./site/metrika-pixel.astro",
+		"./sentry.astro": "./site/sentry.astro",
 		"./changelog.js": {
 			"types": "./site/changelog.d.ts",
 			"default": "./site/changelog.js"
@@ -107,6 +108,7 @@
 	"dependencies": {
 		"@axe-core/playwright": "4.13.0",
 		"@ianvs/prettier-plugin-sort-imports": "4.7.1",
+		"@sentry/browser": "11.8.0",
 		"@stylistic/eslint-plugin": "5.10.0",
 		"postcss-html": "2.0.0",
 		"prettier-plugin-astro": "1.1.0",

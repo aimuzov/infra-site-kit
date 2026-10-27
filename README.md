@@ -36,6 +36,7 @@ Shared CI, linter and e2e configs for the aimuzov sites built from [infra-site-t
 - [**Collapsible panels**](#collapsible-panels): a button that hides a sidebar and a script that keeps the choice before the first paint.
 - [**Current section**](#current-section): the section being read, for a table of contents to light up.
 - [**Yandex Metrika**](#yandex-metrika) that loads after the first interaction and brings its own CSP sources.
+- [**Sentry**](#sentry) for browser errors: no DSN, no script, and the SDK loads after `load`.
 - [**Not-found page**](#not-found-page) with the author's face and suggestions from the sitemap.
 - [**Reader changelog**](#reader-changelog): the "Что нового" page, its format and the release PR check.
 - [**E2E tests**](#e2e-tests): the Playwright preset and the checks every site shares.
@@ -379,6 +380,32 @@ import MetrikaPixel from '@aimuzov/infra-site-kit/metrika-pixel.astro'
 
 The site's `security.csp` keeps no Yandex sources: the component brings them only to pages that have it.
 
+## Sentry
+
+Browser errors go to Sentry, nothing else: no tracing, replay or profiling, and no data about the visitor: SDK 11 has no `sendDefaultPii` and collects everything by default, so `dataCollection` turns off user info (and with it the IP), cookies, headers, bodies, URL query, gen AI data and stack frame variables, and `beforeSend` cuts the query off the file addresses in stack traces: for an inline script that file is the page address. Session tracking is off as well: a page talks to Sentry only when it has an error, not on every load. The release is `<name>@<version>` from the site's `package.json`, read at build time from the directory the build runs in; the environment is `production`.
+
+`sentry.astro` goes into `<head>`, like `metrika.astro`, because it puts the ingest host of the DSN into `connect-src` of the page CSP. It renders nothing without a DSN and on the dev server, so such pages get no script at all. With a DSN it renders the config in `<meta name="sentry">` and a small module (~1 KB gzip). The module catches errors from the start and, after `load` when the browser is idle, imports the SDK (~30 KB gzip) as a chunk from the site itself, so `script-src 'self'` covers it. Errors caught before that are sent right after init, marked as unhandled.
+
+```astro
+---
+import Sentry from '@aimuzov/infra-site-kit/sentry.astro'
+---
+
+<head>
+	<Sentry />
+</head>
+```
+
+The props are optional: `dsn` (default `PUBLIC_SENTRY_DSN` of the build), `release` and `environment`.
+
+To turn it on for a site:
+
+1. Create a project in Sentry named after the repo and copy its DSN. The DSN isn't a secret: it ends up in the HTML anyway.
+2. Put `<Sentry />` into `<head>` of the shared layout.
+3. Add `PUBLIC_SENTRY_DSN=<dsn>` to `/srv/<project>/.env` on the projects server. The site is built there, in Docker, and that file reaches `astro build` as a build secret, so neither a GitHub Actions variable nor a workflow change is needed. Locally the variable may stay unset: the dev server has Sentry off anyway, and `astro build` without it renders nothing.
+
+Next step: upload source maps on release, so stack traces point at the source instead of the minified chunks.
+
 ## Not-found page
 
 The 404 every site shares: a big "4 [face] 4" with the author's face in place of the zero (it wiggles its mustache, like in the credit), a heading, a line of text, "На главную" and "Назад", and "Возможно, вы искали" with the pages closest to the missing address.
@@ -498,9 +525,9 @@ npx playwright install chromium
 npm run test:e2e
 ```
 
-- Unit tests (`node --test`) run the configs against [`test/site`](test/site), which takes them by the package name the way a site does, and cover the credit year, the Metrika snippet, the theme peek math, the theme switch, the boot script and the current section line.
+- Unit tests (`node --test`) run the configs against [`test/site`](test/site), which takes them by the package name the way a site does, and cover the credit year, the Metrika snippet, the Sentry boot, release and CSP, the theme peek math, the theme switch, the boot script and the current section line.
 - `npm run check` runs `astro check` and `svelte-check` against [`test/astro`](test/astro): the `ui/` parts on an Astro page with slots, in Svelte markup with snippets, and the props Svelte sees for each part.
-- The kit builds no Astro site, so e2e runs the shared checks against a two-page stand-in from [`test/e2e/server.mjs`](test/e2e/server.mjs): a sitemap with the production domain, a theme button with the peek and the deferred Metrika.
+- The kit has no Astro site, so e2e runs the shared checks against a two-page stand-in from [`test/e2e/server.mjs`](test/e2e/server.mjs): a sitemap with the production domain, a theme button with the peek and the deferred Metrika.
 
 ## Versions
 
