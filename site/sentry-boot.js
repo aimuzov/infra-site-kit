@@ -4,66 +4,15 @@
 
 const EARLY_LIMIT = 20
 
-const withoutQuery = (url) => url.replace(/[?#].*/, '')
-
-/**
- * Убирает query и фрагмент из адресов файлов в событии. `urlQueryParams` их
- * не трогает, а у ошибки из инлайн-скрипта файл -- это адрес самой страницы.
- * У адреса страницы `urlQueryParams` срезает только query, фрагмент остаётся.
- *
- * @param event - Событие Sentry перед отправкой.
- */
-export function stripFileQueries(event) {
-	for (const exception of event.exception?.values ?? []) {
-		for (const frame of exception.stacktrace?.frames ?? []) {
-			if (frame.filename) frame.filename = withoutQuery(frame.filename)
-			if (frame.abs_path) frame.abs_path = withoutQuery(frame.abs_path)
-		}
-	}
-
-	for (const image of event.debug_meta?.images ?? []) {
-		if (image.code_file) image.code_file = withoutQuery(image.code_file)
-	}
-
-	if (event.request?.url) event.request.url = withoutQuery(event.request.url)
-
-	return event
-}
-
-// Консоль сайта перед ошибкой полезна предупреждениями и ошибками, а `log` и `debug`
-// пишут что угодно, в том числе чужие скрипты вроде Метрики.
-const CONSOLE_LEVELS = new Set(['warning', 'error'])
-
-/**
- * Чистит хлебные крошки перед тем, как они попадут в событие. Клики и ввод
- * (`ui.*`) выбрасывает: в них селектор элемента с классами и атрибутами,
- * а для разбора ошибки статичного сайта хватает переходов и запросов. У тех
- * убирает query и фрагмент: `urlQueryParams` срезает только query, а
- * фрагмент остаётся.
- *
- * @param breadcrumb - Крошка, которую SDK собирается сохранить.
- */
-export function cleanBreadcrumb(breadcrumb) {
-	const { category = '', data } = breadcrumb
-
-	if (category.startsWith('ui.')) return null
-	if (category === 'console' && !CONSOLE_LEVELS.has(breadcrumb.level)) return null
-
-	for (const key of ['url', 'from', 'to']) {
-		if (typeof data?.[key] === 'string') data[key] = withoutQuery(data[key])
-	}
-
-	return breadcrumb
-}
-
 /**
  * Опции `Sentry.init`: только ошибки, без трейсинга, реплеев и профилирования,
  * и без данных посетителя. Сессии тоже выключены: иначе SDK
  * шлёт запрос в Sentry на каждой загрузке страницы, а не только при ошибке.
  *
  * @param config - DSN, релиз и окружение из sentry.astro.
+ * @param scrub - `scrubEvent` и `cleanBreadcrumb` из чанка SDK.
  */
-export const sentryOptions = ({ dsn, release, environment }) => ({
+export const sentryOptions = ({ dsn, release, environment }, { scrubEvent, cleanBreadcrumb }) => ({
 	dsn,
 	release,
 	environment,
@@ -78,7 +27,7 @@ export const sentryOptions = ({ dsn, release, environment }) => ({
 		genAI: { inputs: false, outputs: false },
 		stackFrameVariables: false,
 	},
-	beforeSend: stripFileQueries,
+	beforeSend: scrubEvent,
 	beforeBreadcrumb: cleanBreadcrumb,
 	integrations: (defaults) => defaults.filter((integration) => integration.name !== 'BrowserSession'),
 })
@@ -109,7 +58,7 @@ export function bootSentry(config, { win = window, load = () => import('./sentry
 		}
 
 		const { init, captureException } = sdk
-		init(sentryOptions(config))
+		init(sentryOptions(config, sdk))
 
 		// Ранние ошибки помечаем так же, как пометил бы обработчик самого SDK.
 		for (const event of early) {

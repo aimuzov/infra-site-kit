@@ -4,7 +4,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
 
-import { bootSentry, cleanBreadcrumb, sentryOptions, stripFileQueries } from '../site/sentry-boot.js'
+import { bootSentry, sentryOptions } from '../site/sentry-boot.js'
+import * as scrub from '../site/sentry-scrub.js'
 import { parseDsn, sentryCsp, siteRelease } from '../site/sentry.js'
 
 const dsn = 'https://abc123@o42.ingest.us.sentry.io/7'
@@ -23,6 +24,7 @@ const page = (readyState = 'loading') => {
 		requestIdleCallback: (fn) => idle.push(fn),
 	}
 	const load = async () => ({
+		...scrub,
 		init: (options) => (sdk.options = options),
 		captureException: (error, hint) => sdk.captured.push({ error, hint }),
 	})
@@ -45,6 +47,9 @@ test('the SDK loads only after load, when the browser is idle', async () => {
 	assert.equal(sdk.options.dsn, dsn)
 	assert.equal(sdk.options.release, 'site@1.2.3')
 	assert.equal(sdk.options.environment, 'production')
+	// Чистка событий приезжает в чанке SDK и попадает в его же опции.
+	assert.equal(sdk.options.beforeSend, scrub.scrubEvent)
+	assert.equal(sdk.options.beforeBreadcrumb, scrub.cleanBreadcrumb)
 })
 
 test('a page that has already loaded schedules the SDK at once', () => {
@@ -99,7 +104,7 @@ test('a failed SDK load stops collecting errors', async () => {
 })
 
 test('the options turn on nothing but errors', () => {
-	const options = sentryOptions(config)
+	const options = sentryOptions(config, scrub)
 
 	// В SDK 11 этой опции нет, всё решает dataCollection.
 	assert.equal('sendDefaultPii' in options, false)
@@ -117,68 +122,16 @@ test('the options turn on nothing but errors', () => {
 	}
 })
 
-test('file addresses in an event lose the query and the fragment', () => {
-	const page = 'https://site.example/page?token=1#top'
-	const event = {
-		exception: {
-			values: [{ stacktrace: { frames: [{ filename: page, abs_path: page }, { filename: '<anonymous>' }] } }],
-		},
-		debug_meta: { images: [{ code_file: page }] },
-		request: { url: 'https://site.example/page#top' },
-	}
+test('the SDK chunk brings the scrubbers along', async () => {
+	const chunk = await import('../site/sentry-sdk.js')
 
-	assert.equal(sentryOptions(config).beforeSend, stripFileQueries)
-	const [frame, anonymous] = stripFileQueries(event).exception.values[0].stacktrace.frames
-	assert.equal(frame.filename, 'https://site.example/page')
-	assert.equal(frame.abs_path, 'https://site.example/page')
-	assert.equal(anonymous.filename, '<anonymous>')
-	assert.equal(event.debug_meta.images[0].code_file, 'https://site.example/page')
-	assert.equal(event.request.url, 'https://site.example/page')
-	assert.deepEqual(stripFileQueries({ message: 'plain' }), { message: 'plain' })
-})
-
-test('breadcrumbs keep requests and navigation without the query and the fragment', () => {
-	assert.equal(sentryOptions(config).beforeBreadcrumb, cleanBreadcrumb)
-
-	const fetch = cleanBreadcrumb({
-		category: 'fetch',
-		data: { method: 'GET', url: 'https://api.example/search?q=secret#top', status_code: 200 },
-	})
-
-	assert.deepEqual(fetch.data, { method: 'GET', url: 'https://api.example/search', status_code: 200 })
-
-	const xhr = cleanBreadcrumb({ category: 'xhr', data: { url: '/api?token=1' } })
-
-	assert.equal(xhr.data.url, '/api')
-
-	const navigation = cleanBreadcrumb({ category: 'navigation', data: { from: '/a?x=1', to: '/b#anchor' } })
-
-	assert.deepEqual(navigation.data, { from: '/a', to: '/b' })
-
-	const sentry = { category: 'sentry.event', message: 'Error: boom' }
-
-	assert.equal(cleanBreadcrumb(sentry), sentry)
-})
-
-test('breadcrumbs of clicks and input are dropped with their selectors', () => {
-	for (const category of ['ui.click', 'ui.input', 'ui.keypress']) {
-		assert.equal(cleanBreadcrumb({ category, message: 'body > form.login > input[name="email"]' }), null)
-	}
-})
-
-test('console breadcrumbs keep only warnings and errors', () => {
-	for (const level of ['log', 'info', 'debug']) {
-		assert.equal(cleanBreadcrumb({ category: 'console', level, message: 'noise' }), null, level)
-	}
-
-	for (const level of ['warning', 'error']) {
-		assert.equal(cleanBreadcrumb({ category: 'console', level, message: 'kept' }).message, 'kept', level)
-	}
+	assert.equal(chunk.scrubEvent, scrub.scrubEvent)
+	assert.equal(chunk.cleanBreadcrumb, scrub.cleanBreadcrumb)
 })
 
 test('the options drop session tracking, so a page load alone sends nothing', () => {
 	const defaults = ['InboundFilters', 'BrowserSession', 'GlobalHandlers'].map((name) => ({ name }))
-	const kept = sentryOptions(config).integrations(defaults)
+	const kept = sentryOptions(config, scrub).integrations(defaults)
 
 	assert.deepEqual(
 		kept.map(({ name }) => name),
