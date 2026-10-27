@@ -9,7 +9,9 @@ import ThemeToggle from '@aimuzov/infra-site-kit/ui/theme-toggle.svelte'
 
 import Panel from '../components/panel.svelte'
 
-// Пропсы проверяются и здесь: ошибку обязаны дать `tone` не из списка и `client:*` у Dropzone.
+// Пропсы проверяются и здесь: ошибку обязаны дать `tone` не из списка
+// и `client:*` у Dropzone. Сниппет `children` и необязательный `onclick`
+// тоже функции, но `client:*` они не запрещают.
 ---
 
 <ThemeToggle client:load locale="en" />
@@ -27,6 +29,9 @@ import Panel from '../components/panel.svelte'
 	<p>text</p>
 </Alert>
 <Panel client:load />
+<Button client:load>Send</Button>
+<ChipButton client:load>more</ChipButton>
+<Card client:load title="Island">text</Card>
 {/* @ts-expect-error */}
 <Card tone="nope">text</Card>
 {/* @ts-expect-error */}
