@@ -4,7 +4,7 @@
 
 /**
  * Опции `Sentry.init`: только ошибки, без трейсинга, реплеев и профилирования,
- * и без IP, cookies и заголовков посетителя. Сессии тоже выключены: иначе SDK
+ * и без данных посетителя. Сессии тоже выключены: иначе SDK
  * шлёт запрос в Sentry на каждой загрузке страницы, а не только при ошибке.
  *
  * @param config - DSN, релиз и окружение из sentry.astro.
@@ -13,10 +13,17 @@ export const sentryOptions = ({ dsn, release, environment }) => ({
 	dsn,
 	release,
 	environment,
-	sendDefaultPii: false,
-	// В SDK 11 сбор данных настраивается ещё и здесь, и по умолчанию он включён.
-	// User-Agent оставлен: по нему Sentry показывает браузер и систему.
-	dataCollection: { userInfo: false, cookies: false, httpHeaders: { allow: ['User-Agent'] }, urlQueryParams: false },
+	// В SDK 11 `sendDefaultPii` нет, сбор данных задаётся только здесь, и по умолчанию
+	// он включён весь. `userInfo: false` заодно не даёт SDK просить Sentry записать IP.
+	dataCollection: {
+		userInfo: false,
+		cookies: false,
+		httpHeaders: false,
+		httpBodies: [],
+		urlQueryParams: false,
+		genAI: { inputs: false, outputs: false },
+		stackFrameVariables: false,
+	},
 	integrations: (defaults) => defaults.filter((integration) => integration.name !== 'BrowserSession'),
 })
 

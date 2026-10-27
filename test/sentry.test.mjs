@@ -90,12 +90,16 @@ test('a failed SDK load stops collecting errors', async () => {
 test('the options turn on nothing but errors', () => {
 	const options = sentryOptions(config)
 
-	assert.equal(options.sendDefaultPii, false)
+	// В SDK 11 этой опции нет, всё решает dataCollection.
+	assert.equal('sendDefaultPii' in options, false)
 	assert.deepEqual(options.dataCollection, {
 		userInfo: false,
 		cookies: false,
-		httpHeaders: { allow: ['User-Agent'] },
+		httpHeaders: false,
+		httpBodies: [],
 		urlQueryParams: false,
+		genAI: { inputs: false, outputs: false },
+		stackFrameVariables: false,
 	})
 	for (const key of ['tracesSampleRate', 'replaysSessionSampleRate', 'profilesSampleRate']) {
 		assert.equal(key in options, false, key)
