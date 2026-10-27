@@ -67,7 +67,7 @@ test('a token in .env turns on hidden source maps and the upload', async () => {
 	const root = site({ '.env': 'SENTRY_AUTH_TOKEN=from-file\nSENTRY_ORG=aimuzov\nPUBLIC_SENTRY_DSN=x\n' })
 	const { config, plugin } = await setup(root)
 
-	assert.equal(config.vite.build.sourcemap, 'hidden')
+	assert.equal(config.vite.environments.client.build.sourcemap, 'hidden')
 	assert.equal(plugin.authToken, 'from-file')
 	assert.equal(plugin.org, 'aimuzov')
 	assert.equal(plugin.project, 'sorebody')

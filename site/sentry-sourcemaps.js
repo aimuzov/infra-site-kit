@@ -81,7 +81,7 @@ export default function sentrySourcemaps({
 
 				updateConfig({
 					vite: {
-						build: { sourcemap: 'hidden' },
+						environments: { client: { build: { sourcemap: 'hidden' } } },
 						// Серверная сборка Astro только рендерит страницы, в браузер её код не попадает.
 						plugins: plugins.map((plugin) => ({
 							...plugin,
