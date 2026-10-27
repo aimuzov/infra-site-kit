@@ -47,6 +47,12 @@ const BEARER = /\b(Bearer\s+)[\w~+/.=-]+/gi
 // без пар поиск квадратичен.
 const PAIR_NAME = /(?<![\w.-])([\w.-]+)["']?\s*[:=]\s*["'`]?/g
 const PAIR_VALUE = /[^\s"'`,;&=]+/y
+// Значение в кавычках идёт до закрывающей, экранированные `\"` его не обрывают.
+const QUOTED = {
+	'"': /(?:\\[\s\S]|[^\\"])*/y,
+	"'": /(?:\\[\s\S]|[^\\'])*/y,
+	'`': /(?:\\[\s\S]|[^\\`])*/y,
+}
 // Значения всех параметров адреса, в query и во фрагменте: `?q=...`, `#request=...`.
 const URL_PARAM = /([?&#][^\s?&#=<>"'`()]+=)[^\s&#<>"'`()]+/g
 const JWT = /\beyJ[\w-]+\.[\w-]+(?:\.[\w-]+)?/g
@@ -61,15 +67,11 @@ const WORD = /[\w-]{20,}/g
  * @param quote - Последний символ перед значением, открывающая кавычка или нет.
  */
 function valueEnd(text, start, quote) {
-	if (`"'\``.includes(quote)) {
-		const close = text.indexOf(quote, start)
+	const value = QUOTED[quote] ?? PAIR_VALUE
 
-		return close === -1 ? text.length : close
-	}
+	value.lastIndex = start
 
-	PAIR_VALUE.lastIndex = start
-
-	return PAIR_VALUE.test(text) ? PAIR_VALUE.lastIndex : start
+	return value.test(text) ? value.lastIndex : start
 }
 
 /**

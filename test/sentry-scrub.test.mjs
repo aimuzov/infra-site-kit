@@ -61,6 +61,7 @@ test('text loses headers, named secrets, values of URL parameters and tokens', (
 		// Значение в кавычках целиком, с пробелами и запятыми.
 		['{"password": "my secret phrase"}', '{"password": "[Filtered]"}'],
 		["secretAnswer='first pet, Rex' given", "secretAnswer='[Filtered]' given"],
+		['password: "first\\"second phrase" next', 'password: "[Filtered]" next'],
 		// Пара внутри значения другой пары не прячется.
 		['{"error":"api_key=abc"}', '{"error":"api_key=[Filtered]"}'],
 		[`token ${signed}`, 'token [Filtered]'],
