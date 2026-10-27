@@ -1,8 +1,13 @@
 name: Check
 
+# Ветки проверяются через PR, а main на push: его статус показывает бейдж в README,
+# и релизный тег ставится на этот же коммит. Push на любую ветку и тег дал бы
+# на PR вторую проверку `check` на тот же коммит.
 on:
-  push:
   pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -10,7 +15,7 @@ permissions:
 jobs:
   check:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -20,13 +25,16 @@ jobs:
       - run: npm ci
       - run: npm run format:check
       - run: npm test
-      # Браузер кешируем по версии Playwright,
-      # а его системные библиотеки ставятся из apt каждый прогон.
+      # Браузер кэшируем по версии Playwright.
       - id: playwright
         run: echo "version=$(npm ls @playwright/test --json | jq -r '.dependencies["@playwright/test"].version')" >> "$GITHUB_OUTPUT"
       - uses: actions/cache@v4
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
-      - run: npx playwright install --with-deps chromium
+      - run: npx playwright install chromium
+      # Библиотеки Chromium в образе ubuntu-latest уже есть. `--with-deps` тянул из apt
+      # ещё шрифты и обновления, и медленное зеркало растягивало это больше чем на 10 минут.
+      # Теперь apt нужен, только если браузер не запускается.
+      - run: node -e "require('@playwright/test').chromium.launch().then((browser) => browser.close())" || npx playwright install-deps chromium
       - run: npm run test:e2e
