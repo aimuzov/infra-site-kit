@@ -42,7 +42,9 @@ test('the SDK loads only after load, when the browser is idle', async () => {
 	assert.equal(sdk.options, null)
 
 	await run()
-	assert.deepEqual(sdk.options, { ...config, sendDefaultPii: false })
+	assert.equal(sdk.options.dsn, dsn)
+	assert.equal(sdk.options.release, 'site@1.2.3')
+	assert.equal(sdk.options.environment, 'production')
 })
 
 test('a page that has already loaded schedules the SDK at once', () => {
@@ -77,9 +79,19 @@ test('the options turn on nothing but errors', () => {
 	const options = sentryOptions(config)
 
 	assert.equal(options.sendDefaultPii, false)
-	for (const key of ['tracesSampleRate', 'replaysSessionSampleRate', 'profilesSampleRate', 'integrations']) {
+	for (const key of ['tracesSampleRate', 'replaysSessionSampleRate', 'profilesSampleRate']) {
 		assert.equal(key in options, false, key)
 	}
+})
+
+test('the options drop session tracking, so a page load alone sends nothing', () => {
+	const defaults = ['InboundFilters', 'BrowserSession', 'GlobalHandlers'].map((name) => ({ name }))
+	const kept = sentryOptions(config).integrations(defaults)
+
+	assert.deepEqual(
+		kept.map(({ name }) => name),
+		['InboundFilters', 'GlobalHandlers'],
+	)
 })
 
 test('the CSP lets the page reach the ingest host of the DSN', () => {

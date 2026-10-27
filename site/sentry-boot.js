@@ -4,11 +4,18 @@
 
 /**
  * Опции `Sentry.init`: только ошибки, без трейсинга, реплеев и профилирования,
- * и без IP, cookies и заголовков посетителя.
+ * и без IP, cookies и заголовков посетителя. Сессии тоже выключены: иначе SDK
+ * шлёт запрос в Sentry на каждой загрузке страницы, а не только при ошибке.
  *
  * @param config - DSN, релиз и окружение из sentry.astro.
  */
-export const sentryOptions = ({ dsn, release, environment }) => ({ dsn, release, environment, sendDefaultPii: false })
+export const sentryOptions = ({ dsn, release, environment }) => ({
+	dsn,
+	release,
+	environment,
+	sendDefaultPii: false,
+	integrations: (defaults) => defaults.filter((integration) => integration.name !== 'BrowserSession'),
+})
 
 /**
  * Подключает Sentry на странице.
