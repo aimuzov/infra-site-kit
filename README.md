@@ -398,7 +398,17 @@ The site's `security.csp` keeps no Yandex sources: the component brings them onl
 
 ## Sentry
 
-Browser errors go to Sentry with a few breadcrumbs, nothing else: no tracing, replay or profiling, and as little about the visitor as an error can do with: SDK 11 has no `sendDefaultPii` and collects everything by default, so `dataCollection` turns off user info (and with it the IP), cookies, headers, bodies, URL query, gen AI data and stack frame variables, and `beforeSend` cuts the query and the fragment off the file addresses in stack traces (for an inline script that file is the page address) and the fragment off the page address, which `urlQueryParams` leaves. Breadcrumbs keep what helps to read an error without what the visitor did on the page: `beforeBreadcrumb` drops clicks and input (`ui.*`), whose selectors carry element classes and attributes, keeps navigation, `fetch` and XHR with addresses cut down to the path, and keeps console output only for warnings and errors, since `log` and `debug` carry anything, third-party scripts included. What's left can still hold something of the visitor: an id in a URL path, or input that a warning quotes, so don't put such things into paths or console messages. Session tracking is off as well: a page talks to Sentry only when it has an error, not on every load. The release is `<name>@<version>` from the site's `package.json`, read at build time from the directory the build runs in; the environment is `production`.
+Browser errors go to Sentry with a few breadcrumbs, nothing else: no tracing, replay or profiling, and as little about the visitor as an error can do with. SDK 11 has no `sendDefaultPii` and collects everything by default, so `dataCollection` turns off user info (and with it the IP), cookies, headers, bodies, URL query, gen AI data and stack frame variables.
+
+That still leaves the URL fragment, where an MCP connector page keeps its signed sign-in `request` and OAuth its `access_token`, and the SDK never looks into error text, console arguments or an object thrown instead of an error. So `beforeSend` goes over the event once more:
+
+- the page address, file addresses in stack traces (for an inline script that is the page address), request and navigation addresses lose the query, the fragment and a token in the path;
+- error text, messages, console arguments and thrown objects lose the values of `Authorization` and `Cookie`, `Bearer` tokens, pairs with a telling name (`password=`, `"access_token":`, `session:` and the like), every URL parameter value in the query and the fragment, JWTs and long random strings (hex, UUID, base64url). Each becomes `[Filtered]`, and the rest of the text still reads;
+- fields with such names in thrown objects and headers become `[Filtered]` whole, and of the request only the address and headers stay, with no cookies, query or body.
+
+Breadcrumbs keep what helps to read an error without what the visitor did on the page: `beforeBreadcrumb` drops clicks and input (`ui.*`), whose selectors carry element classes and attributes, keeps navigation, `fetch` and XHR, and keeps console output only for warnings and errors, since `log` and `debug` carry anything, third-party scripts included.
+
+The cleanup goes by names and shapes, so a short secret without a telling name (a six-digit code in a path, a word the visitor typed and a warning quotes), an email or a name still gets through, and so do tags and contexts a site sets itself: keep such things out of paths, messages and the console. The cleanup ships in the SDK chunk, so the module a page loads at once stays small. Session tracking is off as well: a page talks to Sentry only when it has an error, not on every load. The release is `<name>@<version>` from the site's `package.json`, read at build time from the directory the build runs in; the environment is `production`.
 
 `sentry.astro` goes into `<head>`, like `metrika.astro`, because it puts the ingest host of the DSN into `connect-src` of the page CSP. It renders nothing without a DSN and on the dev server, so such pages get no script at all. With a DSN it renders the config in `<meta name="sentry">` and a small module (~1 KB gzip). The module catches errors from the start and, after `load` when the browser is idle, imports the SDK (~30 KB gzip) as a chunk from the site itself, so `script-src 'self'` covers it. Errors caught before that are sent right after init, marked as unhandled.
 
@@ -541,9 +551,10 @@ npx playwright install chromium
 npm run test:e2e
 ```
 
-- Unit tests (`node --test`) run the configs against [`test/site`](test/site), which takes them by the package name the way a site does, and cover the credit year, the Metrika snippet, the Sentry boot, breadcrumbs, release and CSP, the theme peek math, the theme switch, the boot script and the current section line.
+- Unit tests (`node --test`) run the configs against [`test/site`](test/site), which takes them by the package name the way a site does, and cover the credit year, the Metrika snippet, the Sentry boot, breadcrumbs, event cleanup, release and CSP, the theme peek math, the theme switch, the boot script and the current section line.
 - `npm run check` runs `astro check` and `svelte-check` against [`test/astro`](test/astro): the `ui/` parts on an Astro page with slots, in Svelte markup with snippets, and the props Svelte sees for each part.
 - The kit builds no Astro site, so e2e runs the shared checks against a two-page stand-in from [`test/e2e/server.mjs`](test/e2e/server.mjs): a sitemap with the production domain, a theme button with the peek and the deferred Metrika.
+- The Sentry page of the [`test/ui`](test/ui) stand runs the real SDK against a stubbed ingest: a signed request in the fragment and a token in queries, the console and a thrown object never reach it.
 
 ## Versions
 
