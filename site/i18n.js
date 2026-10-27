@@ -6,7 +6,7 @@ export const LOCALES = /** @type {const} */ (['ru', 'en'])
 
 export const DEFAULT_LOCALE = 'ru'
 
-/** Cookie с явным выбором языка: сервер с ним больше не смотрит на `Accept-Language`. */
+/** Cookie с явным выбором языка: с ним ни Caddy, ни locale-boot не уводят на язык браузера. */
 export const LOCALE_COOKIE = 'lang'
 
 /** Название языка на нём самом: так его узнаёт тот, кто ищет в меню свой язык. */
