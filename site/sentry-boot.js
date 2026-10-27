@@ -2,6 +2,8 @@
 // и первой картинкой, поэтому он грузится отдельным чанком после load, когда браузер
 // свободен. Ошибки до этого момента копятся и уходят сразу после инициализации.
 
+const EARLY_LIMIT = 20
+
 const withoutQuery = (url) => url.replace(/[?#].*/, '')
 
 /**
@@ -58,8 +60,10 @@ export const sentryOptions = ({ dsn, release, environment }) => ({
  * @param page - Окно и загрузчик SDK, подменяются в тестах.
  */
 export function bootSentry(config, { win = window, load = () => import('./sentry-sdk.js') } = {}) {
+	// Если чанк SDK завис, слушатели живут долго, поэтому ранних ошибок держим немного:
+	// при сбое в цикле первых хватит, чтобы понять, что случилось.
 	const early = []
-	const keep = (event) => early.push(event)
+	const keep = (event) => early.length < EARLY_LIMIT && early.push(event)
 	const kinds = ['error', 'unhandledrejection']
 
 	for (const kind of kinds) win.addEventListener(kind, keep)

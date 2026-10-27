@@ -75,6 +75,17 @@ test('errors before the SDK are sent after init as unhandled', async () => {
 	assert.equal(listeners.unhandledrejection, undefined)
 })
 
+test('errors before the SDK are kept only up to a limit', async () => {
+	const { win, load, listeners, sdk, run } = page('complete')
+
+	bootSentry(config, { win, load })
+	for (let i = 0; i < 50; i++) listeners.error({ type: 'error', error: new Error(`boom ${i}`) })
+	await run()
+
+	assert.equal(sdk.captured.length, 20)
+	assert.equal(sdk.captured[0].error.message, 'boom 0')
+})
+
 test('a failed SDK load stops collecting errors', async () => {
 	const { win, listeners, idle } = page('complete')
 	const failed = new Error('chunk is gone')
