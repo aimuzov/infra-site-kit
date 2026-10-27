@@ -191,6 +191,9 @@ test('search with the site button, prompt and labels moves by Ctrl-j/k and repor
 	// Ctrl-j в ЙЦУКЕН: символ "о", а код клавиши тот же.
 	await input.dispatchEvent('keydown', { key: 'о', code: 'KeyJ', ctrlKey: true })
 	await expect(hits.nth(1)).toHaveClass(/search__hit--active/)
+	// AltGr+N в польской раскладке -- буква "ń", выбор стоит на месте.
+	await input.dispatchEvent('keydown', { key: 'ń', code: 'KeyN', ctrlKey: true, altKey: true })
+	await expect(hits.nth(1)).toHaveClass(/search__hit--active/)
 
 	await input.fill('несуществующееслово')
 	await expect(dialog.getByRole('status')).toHaveText('Пусто: несуществующееслово')

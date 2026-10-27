@@ -195,7 +195,8 @@
 
 		if (event.key === 'ArrowUp') return -1
 
-		if (!vimKeys || !event.ctrlKey || event.shiftKey) return 0
+		// AltGr в Windows приходит как Ctrl+Alt: это буква раскладки, например "ń".
+		if (!vimKeys || !event.ctrlKey || event.altKey || event.shiftKey) return 0
 
 		// Код клавиши держит её место: в кириллице Ctrl-j приходит как "о", но с кодом `KeyJ`.
 		const is = (/** @type {string} */ letter) => event.key === letter || event.code === `Key${letter.toUpperCase()}`
