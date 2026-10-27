@@ -181,6 +181,9 @@ test('search with the site button, prompt and labels moves by Ctrl-j/k and repor
 	await input.fill('пациенты')
 	await expect(hits).toHaveCount(2)
 	await expect(hits.nth(0)).toHaveClass(/search__hit--active/)
+	// Стенд собран без postcss-nested: рамка выбранного проверяет, что стиль дошёл сам.
+	await expect(hits.nth(0)).toHaveCSS('border-top-color', 'rgb(255, 0, 0)')
+	await expect(hits.nth(1)).toHaveCSS('border-top-color', 'rgba(0, 0, 0, 0)')
 	await page.keyboard.press('Control+j')
 	await expect(hits.nth(1)).toHaveClass(/search__hit--active/)
 	await page.keyboard.press('Control+p')

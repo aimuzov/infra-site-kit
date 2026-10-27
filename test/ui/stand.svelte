@@ -30,7 +30,7 @@
 		<LangSwitch locale="ru" path="/ui/" />
 		<PanelToggle panel="demo" controls="stand-panel" side="right" name="оглавление" prefix="stand" />
 	</div>
-	<div>
+	<div style="--ui-search-hit-border: 1px; --ui-hover-border: rgb(255 0 0)">
 		<button type="button" onclick={() => docs.open()}>Найти в доках</button>
 		<Search
 			bind:this={docs}

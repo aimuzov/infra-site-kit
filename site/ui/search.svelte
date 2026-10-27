@@ -443,7 +443,7 @@
 		color: var(--ui-fg);
 		text-decoration: none;
 
-		&--active {
+		&.search__hit--active {
 			border-color: var(--ui-hover-border);
 			background: var(--ui-hover-bg, var(--ui-surface));
 		}
