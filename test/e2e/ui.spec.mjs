@@ -131,6 +131,16 @@ test('search opens by the button and by Cmd/Ctrl-K, finds a section and closes o
 	const dialog = page.getByRole('dialog', { name: 'Поиск по сайту' })
 	const input = dialog.getByRole('searchbox', { name: 'Что найти?' })
 
+	// Окно, открытое клавишей, тоже отдаёт фокус сразу:
+	// следующий "/" открывает его снова, а не уходит в скрытое поле.
+	await page.keyboard.press('/')
+	await expect(input).toBeFocused()
+	await page.keyboard.press('Escape')
+	await page.keyboard.press('/')
+	await expect(input).toBeFocused()
+	await page.keyboard.press('Escape')
+	await expect(dialog).toBeHidden()
+
 	await page.getByRole('button', { name: 'Поиск по сайту' }).click()
 	await expect(input).toBeFocused()
 

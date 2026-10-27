@@ -157,11 +157,23 @@
 		input?.select()
 	}
 
+	function close() {
+		if (!dialog.open) return
+
+		// Фокус из закрытого окна браузер убирает только к следующему кадру,
+		// а до тех пор клавиши страницы попадали бы в скрытое поле.
+		/** @type {HTMLElement | null} */ (dialog.querySelector(':focus'))?.blur()
+		dialog.close()
+		// Сайт узнаёт о закрытии сразу: событие close пришло бы задачей позже,
+		// и клавиши его бы опередили.
+		onclose?.()
+	}
+
 	/** @param {Hit | undefined} hit */
 	function go(hit) {
 		if (!hit) return
 
-		dialog.close()
+		close()
 		location.assign(hit.url)
 	}
 
@@ -206,7 +218,7 @@
 		} else if (event.key === 'Escape') {
 			// Поле поиска съедает Esc, чтобы очистить себя, и окно не закрылось бы с первого раза.
 			event.preventDefault()
-			dialog.close()
+			close()
 		}
 	}
 
@@ -225,9 +237,15 @@
 		}
 	}
 
+	// Esc вне поля, например на результате, закрывает окно тем же путём, что и в поле.
+	function onCancel(/** @type {Event} */ event) {
+		event.preventDefault()
+		close()
+	}
+
 	// Клик мимо окна попадает в сам <dialog>, его подложку.
 	function onClick(/** @type {MouseEvent} */ event) {
-		if (event.target === dialog) dialog.close()
+		if (event.target === dialog) close()
 	}
 </script>
 
@@ -239,7 +257,7 @@
 	</button>
 {/if}
 
-<dialog bind:this={dialog} class="search" aria-label={text('open')} onclick={onClick} {onclose}>
+<dialog bind:this={dialog} class="search" aria-label={text('open')} onclick={onClick} oncancel={onCancel}>
 	<div class="search__box">
 		<div class="search__bar">
 			{#if prompt}
@@ -259,7 +277,7 @@
 				onkeydown={onKeydown}
 			/>
 			{#if closeButton}
-				<button class="search__close" type="button" aria-label={text('closeLabel')} onclick={() => dialog.close()}>
+				<button class="search__close" type="button" aria-label={text('closeLabel')} onclick={close}>
 					<X size={16} aria-hidden="true" />
 				</button>
 			{/if}
@@ -280,7 +298,7 @@
 							class:search__hit--active={index === active}
 							href={hit.url}
 							onmouseenter={() => (active = index)}
-							onclick={() => dialog.close()}
+							onclick={close}
 						>
 							<span class="search__title">
 								{hit.page}{#if hit.section}<span class="search__sep" aria-hidden="true">›</span>{hit.section}{/if}
