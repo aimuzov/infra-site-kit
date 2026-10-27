@@ -3,8 +3,19 @@
 
 const FILTERED = '[Filtered]'
 
-// Имена полей, заголовков и параметров, чьё значение при разборе ошибки не нужно.
-const SECRET_KEY = /passw|secret|token|session|csrf|xsrf|jwt|credential|signature|api[-_]?key|cookie|authoriz/i
+// Части имён полей, заголовков и параметров, которые выдают секрет в любом месте
+// имени: `newPassword`, `x-csrf-token`, `privateKey`. Имя берётся в `snake_case`.
+const SECRET_PART =
+	/passw|passphrase|passcode|secret|token|session|sessid|csrf|xsrf|jwt|credential|signature|(?:api|private)_?key|cookie|authoriz/
+// Короткие выдают его только отдельным словом: `auth`, но не `author`. А `pass`
+// и `pin` -- последним: `user_pin`, но не `min_pin_length` и `render_pass_encoder`.
+const SECRET_WORD = /(?<![a-z])(?:pwd|[th]?otp|o?auth|mfa|sid|sig|cvc|cvv)(?![a-z])|(?<![a-z])(?:pass|pin)$/
+// `code` -- только сам по себе или с уточнением: у `status_code` и `error_code`
+// в значении не секрет, а то, что нужно для разбора ошибки.
+const SECRET_CODE =
+	/^(?:(?:auth|otp|pin|sms|email|verification|verify|confirm|confirmation|reset|recovery|backup|invite|access|login|security|device|user|one_time)_)?code$/
+// `TokenExpiredError: jwt expired` -- не поле с секретом, а тип ошибки и её текст.
+const ERROR_NAME = /(?:error|exception)$/
 
 const URL_KEYS = ['url', 'from', 'to']
 
@@ -16,65 +27,125 @@ const CONSOLE_LEVELS = new Set(['warning', 'error'])
 // у MCP-коннекторов подписанный запрос входа `#request=...`, у OAuth `#access_token=...`.
 const withoutQuery = (url) => url.replace(/[?#].*/, '')
 
-const kind = (char) =>
-	/\d/.test(char) ? 'digit' : /[a-z]/.test(char) ? 'lower' : /[A-Z]/.test(char) ? 'upper' : 'other'
+/**
+ * Выдаёт ли имя, что в значении секрет.
+ *
+ * @param name - Имя поля, заголовка или параметра: `newPassword`, `user[pin]`.
+ */
+function isSecretName(name) {
+	const snake = name
+		.replace(/([a-z\d])([A-Z])/g, '$1_$2')
+		.toLowerCase()
+		.replace(/[^a-z\d]+/g, '_')
+
+	if (ERROR_NAME.test(snake)) return false
+
+	return SECRET_PART.test(snake) || SECRET_WORD.test(snake) || SECRET_CODE.test(snake)
+}
+
+const BEARER = /\b(Bearer\s+)[\w~+/.=-]+/gi
+// Логин и пароль в адресе: `https://user:pass@host`.
+const USERINFO = /(?<=:\/\/)[^\s/?#"'`<>]+@/g
+// Имя пары берётся только с начала слова, иначе на длинной строке без пар поиск
+// квадратичен. В имени бывают скобки формы (`user[password]=`), перед кавычками --
+// слеши экранирования, а разделитель бывает и `=>`.
+const PAIR_NAME = /(?<![\w.[\]-])([\w.[\]-]+)(?:\\*["'])?\s*(?:=>|[:=])\s*(?:\\*["'`])?/g
+// Значение без кавычек после `=` -- одно слово: так пишут в адресе, форме и cookie.
+// `,` и `;` бывают в пароле и обрывают его, только если за ними пробел или конец,
+// а `&` и `#` -- ещё и перед следующим параметром адреса.
+const WORD_VALUE = /(?:[^\s"'`,;&#]|[,;](?=[^\s"'`])|[&#](?![\w.%[\]-]+=)(?=[^\s"'`]))*/y
+// После `:` или с пробелом -- фраза до конца строки или до следующей пары
+// (`, page: 2`): пароль бывает из нескольких слов. `\n` в JSON -- тоже конец строки.
+const PHRASE_VALUE = /(?:[^\r\n,;\\]|\\(?![rn])|[,;](?!\s*(?:\\*["'])?[\w.[\]-]+(?:\\*["'])?\s*(?:=>|[:=])))*/y
+// У `Cookie` и `Authorization` значение до конца строки целиком: в нём пары
+// через `;`, кавычки и поля Digest.
+const LINE_VALUE = /(?:[^\r\n\\]|\\(?![rn]))*/y
+const HEADER_NAME = /(?:cookies?|authorization)$/i
+// Значение параметра адреса обрывают `&`, `#` и то, что браузер в адресе кодирует.
+// `'`, `(` и `)` во фрагменте остаются как есть и обрывают значение, только если
+// стоят в самом конце, как скобка или кавычка вокруг адреса.
+const PARAM_VALUE = String.raw`(?:[^\s&#<>"'\`()]|['()]+(?=[^\s&#<>"'\`()]))+`
+// Параметры адреса в query и во фрагменте: `?q=...`, `#request=...`.
+const URL_PARAM = new RegExp(String.raw`([?&#][^\s?&#=<>"\`]+=)${PARAM_VALUE}`, 'g')
+// Первый параметр без `?` и `#`: в теле формы и в `location.hash.slice(1)`.
+const QUERY_START = new RegExp(String.raw`(?<![\w.%[\]=-])([\w.%[\]-]+=)${PARAM_VALUE}(?=&[\w.%[\]-]+=)`, 'g')
+const JWT = /\beyJ[\w-]+\.[\w-]+(?:\.[\w-]+)?/g
 
 /**
- * Похоже ли слово из букв, цифр, `-` и `_` на токен. Hex и UUID видно по алфавиту, а
- * base64url по тому, что вид символа в случайной строке меняется почти на каждом шаге,
- * а в словах и именах вроде `OffscreenCanvasRenderingContext2D` редко.
+ * Где кончается значение в кавычках: на кавычке того же уровня экранирования, что
+ * и открывающая. В JSON внутри строки (`{\"password\":\"...\"}`) перед своими
+ * кавычками один слеш, перед кавычкой в значении три, и на каждом уровне слешей
+ * вдвое больше и ещё один.
  *
- * @param word - Слово от 20 символов.
+ * @param text - Текст с парой.
+ * @param start - Начало значения, сразу за открывающей кавычкой.
+ * @param quote - Кавычка.
+ * @param level - Сколько слешей перед открывающей кавычкой.
  */
-function isTokenLike(word) {
-	if (!/\d/.test(word) || !/[a-z]/i.test(word)) return false
-	if (/^[\da-f-]+$/i.test(word)) return true
-	if (!/[a-z]/.test(word) || !/[A-Z]/.test(word)) return false
+function quotedEnd(text, start, quote, level) {
+	let slashes = 0
 
-	let changes = 0
+	for (let i = start; i < text.length; i++) {
+		if (text[i] === quote && slashes % (2 * level + 2) === level) return i - level
 
-	for (let i = 1; i < word.length; i++) {
-		if (kind(word[i]) !== kind(word[i - 1])) changes++
+		slashes = text[i] === '\\' ? slashes + 1 : 0
 	}
 
-	return changes >= (word.length - 1) * 0.4
+	return text.length
 }
-
-// Заголовки в тексте: значение с пробелами и `;` до конца строки или кавычки.
-const HEADER = /\b((?:set-)?cookie|(?:proxy-)?authorization)(["']?\s*[:=]\s*["'`]?)[^\r\n"'`]+/gi
-const BEARER = /\b(Bearer\s+)[\w~+/.=-]+/gi
-// Имя пары берётся только с начала слова, иначе на длинной строке
-// без пар поиск квадратичен.
-const PAIR_NAME = /(?<![\w.-])([\w.-]+)(?:\\?["'])?\s*[:=]\s*(?:\\?["'`])?/g
-const PAIR_VALUE = /[^\s"'`,;&=]+/y
-// Значение в кавычках идёт до закрывающей, экранированные `\"` его не обрывают.
-const QUOTED = {
-	'"': /(?:\\[\s\S]|[^\\"])*/y,
-	"'": /(?:\\[\s\S]|[^\\'])*/y,
-	'`': /(?:\\[\s\S]|[^\\`])*/y,
-}
-// В строке, где экранированы сами кавычки (`{\"password\":\"...\"}`), значение идёт
-// до `\"`, а кавычка внутри него записана как `\\\"`.
-const ESCAPED_QUOTED = {
-	'"': /(?:\\\\(?:\\[\s\S]|[^\\])|[^\\]|\\[^\\"])*/y,
-	"'": /(?:\\\\(?:\\[\s\S]|[^\\])|[^\\]|\\[^\\'])*/y,
-	'`': /(?:\\\\(?:\\[\s\S]|[^\\])|[^\\]|\\[^\\`])*/y,
-}
-// Значения всех параметров адреса, в query и во фрагменте: `?q=...`, `#request=...`.
-const URL_PARAM = /([?&#][^\s?&#=<>"'`()]+=)[^\s&#<>"'`()]+/g
-const JWT = /\beyJ[\w-]+\.[\w-]+(?:\.[\w-]+)?/g
-const WORD = /[\w-]{20,}/g
 
 /**
- * Где кончается значение пары. В кавычках оно идёт до закрывающей, с пробелами и
- * запятыми: пароль или ответ на секретный вопрос бывает из нескольких слов.
+ * Где кончается объект или массив: на скобке, которая его закрывает. Скобки внутри
+ * строк не в счёт. Без закрывающей скобки значение идёт до конца текста.
+ *
+ * @param text - Текст с парой.
+ * @param start - Открывающая скобка.
+ * @param level - Сколько слешей перед кавычками этого JSON.
+ */
+function nestedEnd(text, start, level) {
+	let depth = 0
+	let quote = ''
+	let slashes = 0
+
+	for (let i = start; i < text.length; i++) {
+		const char = text[i]
+		const own = slashes % (2 * level + 2) === level
+
+		if (quote) {
+			if (char === quote && own) quote = ''
+		} else if ((char === '"' || char === "'") && own) {
+			quote = char
+		} else if (char === '{' || char === '[') {
+			depth++
+		} else if ((char === '}' || char === ']') && --depth === 0) {
+			return i + 1
+		}
+
+		slashes = char === '\\' ? slashes + 1 : 0
+	}
+
+	return text.length
+}
+
+/**
+ * Где кончается значение пары. В кавычках оно идёт до закрывающей, со скобками -- до
+ * парной скобки, а без них зависит от разделителя и имени.
  *
  * @param text - Текст с парой.
  * @param start - Начало значения.
  * @param head - Имя пары с разделителем и открывающей кавычкой, если она есть.
+ * @param name - Имя пары.
  */
-function valueEnd(text, start, head) {
-	const value = (head.at(-2) === '\\' ? ESCAPED_QUOTED : QUOTED)[head.at(-1)] ?? PAIR_VALUE
+function valueEnd(text, start, head, name) {
+	const quoted = head.match(/(\\*)(["'`])$/)
+
+	if (quoted) return quotedEnd(text, start, quoted[2], quoted[1].length)
+
+	if (text[start] === '{' || text[start] === '[') {
+		return nestedEnd(text, start, head.match(/(\\*)["']\s*(?:=>|[:=])/)?.[1].length ?? 0)
+	}
+
+	const value = HEADER_NAME.test(name) ? LINE_VALUE : /:|\s$/.test(head) ? PHRASE_VALUE : WORD_VALUE
 
 	value.lastIndex = start
 
@@ -86,17 +157,17 @@ function valueEnd(text, start, head) {
  * только после такого имени, иначе `error: token=...` спрятал бы пару внутри
  * значения `error`.
  *
- * @param text - Текст, где уже вычищены заголовки.
+ * @param text - Текст, где уже вычищены `Bearer` и логины в адресах.
  */
 function scrubPairs(text) {
 	let result = ''
 	let done = 0
 
 	for (const { 0: head, 1: name, index } of text.matchAll(PAIR_NAME)) {
-		if (index < done || !SECRET_KEY.test(name)) continue
+		if (index < done || !isSecretName(name)) continue
 
 		const start = index + head.length
-		const end = valueEnd(text, start, head)
+		const end = valueEnd(text, start, head, name)
 
 		if (end > start) {
 			result += text.slice(done, start) + FILTERED
@@ -107,24 +178,163 @@ function scrubPairs(text) {
 	return result + text.slice(done)
 }
 
+// Случайную строку ищем среди букв и цифр, склеенных знаками base64 и base64url.
+const TOKEN_RUN = /[\w+/=-]{20,}/g
+const PIECE = /[a-z\d]+|[^a-z\d]+/gi
+
+// Какие буквы за какой идут в 98% пар букв в английских словах и именах DOM API.
+// В случайной строке остальные пары, вроде `qz` или `vb`, бывают почти через раз.
+const COMMON_PAIRS = [
+	'bcdefghiklmnprstuvwxyz',
+	'abeilorsu',
+	'acehiklorstuy',
+	'adeilnorsuy',
+	'abcdefghilmnopqrstuvwxy',
+	'aefilortu',
+	'aeghilnopruy',
+	'aeilmortuy',
+	'abcdefgklmnoprstuvxz',
+	'aeu',
+	'aeil',
+	'abcdeilmopstuvy',
+	'abeilmnopuy',
+	'abcdefghiklmnoprstuvy',
+	'abcdefgiklmnoprstuvwx',
+	'aehiloprstuy',
+	'u',
+	'abcdefghiklmnoprstuvy',
+	'acefhiklmnopstuvwy',
+	'acehilmorstuy',
+	'abcdefgilmnprst',
+	'aegio',
+	'aehinor',
+	'ipt',
+	'acdeilmnoprst',
+	'aeo',
+]
+
+const isDigit = (char) => char >= '0' && char <= '9'
+const isUpper = (char) => char >= 'A' && char <= 'Z'
+
 /**
- * Заменяет секреты в свободном тексте: заголовки Authorization и Cookie, пары с
- * говорящим именем, значения параметров адресов, JWT и длинные случайные строки.
- * Порядок важен: сначала значения по имени, потом то, что похоже на токен само.
+ * Доля мест, где кусок ведёт себя не как слово: цифра рядом с буквой, заглавная
+ * после строчной или пара букв, редкая в словах. У имён вроде `getElementById` это
+ * стыки слов, их мало, а у случайной строки больше трети мест.
+ *
+ * @param piece - Буквы и цифры.
+ */
+function oddness(piece) {
+	let odd = 0
+
+	for (let i = 1; i < piece.length; i++) {
+		const before = piece[i - 1]
+		const char = piece[i]
+
+		if (isDigit(before) !== isDigit(char)) odd++
+		else if (isDigit(char)) continue
+		else if (!isUpper(before) && isUpper(char)) odd++
+		else if (!COMMON_PAIRS[before.toLowerCase().charCodeAt(0) - 97].includes(char.toLowerCase())) odd++
+	}
+
+	return odd / (piece.length - 1)
+}
+
+/**
+ * На что похож кусок из букв и цифр. Короткий кусок не разобрать, поэтому он
+ * `short`, если пишется как слово (`reset`, `Data`, `API`), и `bit`, если нет. Из
+ * букв одного регистра -- слово или константа. Остальное -- `random`, если это hex
+ * или в нём много мест, где слово так себя не ведёт.
+ *
+ * @param piece - Буквы и цифры.
+ */
+function pieceKind(piece) {
+	if (/^\d+$/.test(piece)) return 'bit'
+	if (piece.length < 6) return /^(?:[A-Z]?[a-z]+|[A-Z]+)$/.test(piece) ? 'short' : 'bit'
+	if (/^[\da-f]+$/i.test(piece) && /\d/.test(piece) && /[a-f]/i.test(piece)) return 'random'
+	if (/^(?:[a-z]+|[A-Z]+)$/.test(piece)) return 'word'
+
+	return oddness(piece) >= 0.35 ? 'random' : 'word'
+}
+
+/**
+ * Прячет случайную строку из подряд идущих кусков, если среди них нет слов, а хотя
+ * бы один кусок случайный. Короткие слова и разделители по краям остаются (`/reset/`
+ * перед токеном), но в длину идут соседний разделитель и короткий кусок за `-`, `_`
+ * или `+`: у base64url они бывают и в начале, и в конце.
+ *
+ * @param pieces - Куски без слов и разделители между ними.
+ * @param kinds - Что это за куски.
+ */
+function scrubTokenPieces(pieces, kinds) {
+	const edge = (index) => kinds[index] === 'sep' || kinds[index] === 'short'
+	let from = 0
+	let to = pieces.length
+
+	while (from < to && edge(from)) from++
+	while (to > from && edge(to - 1)) to--
+
+	if (!kinds.slice(from, to).includes('random')) return pieces.join('')
+
+	let first = from
+	let last = to
+
+	if (first > 0) first--
+	if (first > 0 && /^[-_+]$/.test(pieces[first])) first--
+	if (last < pieces.length) last++
+	if (last < pieces.length && /^[-_+]$/.test(pieces[last - 1])) last++
+
+	if (pieces.slice(first, last).join('').length < 20) return pieces.join('')
+
+	return pieces.slice(0, from).join('') + FILTERED + pieces.slice(to).join('')
+}
+
+/**
+ * Случайные строки внутри куска: hex, UUID, base64, base64url, base32 и base36 от
+ * 20 символов. Имена, слова и пути с хешем сборки (`index-BkS2x9aF.js`) остаются.
+ *
+ * @param run - Буквы и цифры, склеенные `-`, `_`, `+`, `/` и `=`.
+ */
+function scrubTokens(run) {
+	const pieces = run.match(PIECE)
+	const kinds = pieces.map((piece) => (/^[a-z\d]/i.test(piece) ? pieceKind(piece) : 'sep'))
+	let result = ''
+
+	for (let start = 0; start < pieces.length;) {
+		let end = start
+
+		while (end < pieces.length && kinds[end] !== 'word') end++
+
+		if (end === start) {
+			result += pieces[start++]
+		} else {
+			result += scrubTokenPieces(pieces.slice(start, end), kinds.slice(start, end))
+			start = end
+		}
+	}
+
+	return result
+}
+
+/**
+ * Заменяет секреты в свободном тексте: логины в адресах, заголовки Authorization
+ * и Cookie, пары с говорящим именем, значения параметров адресов, JWT и длинные
+ * случайные строки. Порядок важен: сначала значения по имени, потом то, что похоже
+ * на токен само.
  *
  * @param text - Текст ошибки, сообщения консоли или поля данных.
  */
 export function scrubText(text) {
-	const headers = text.replace(HEADER, `$1$2${FILTERED}`).replace(BEARER, `$1${FILTERED}`)
+	const named = scrubPairs(text.replace(BEARER, `$1${FILTERED}`).replace(USERINFO, `${FILTERED}@`))
 
-	return scrubPairs(headers)
+	return named
+		.replace(QUERY_START, `$1${FILTERED}`)
 		.replace(URL_PARAM, `$1${FILTERED}`)
 		.replace(JWT, FILTERED)
-		.replace(WORD, (word) => (isTokenLike(word) ? FILTERED : word))
+		.replace(TOKEN_RUN, scrubTokens)
 }
 
 /**
- * Адрес без query и фрагмента и без токенов в пути.
+ * Адрес без query и фрагмента, без логина и пароля и без токенов в пути.
  *
  * @param url - Адрес страницы, запроса или файла.
  */
@@ -142,7 +352,7 @@ function scrubData(value) {
 	if (value === null || typeof value !== 'object') return value
 
 	return Object.fromEntries(
-		Object.entries(value).map(([key, item]) => [key, SECRET_KEY.test(key) ? FILTERED : scrubData(item)]),
+		Object.entries(value).map(([key, item]) => [key, isSecretName(key) ? FILTERED : scrubData(item)]),
 	)
 }
 

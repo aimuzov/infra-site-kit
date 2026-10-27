@@ -6,6 +6,29 @@ import { cleanBreadcrumb, scrubEvent, scrubText, scrubUrl } from '../site/sentry
 // Подписанный запрос входа, как его кладёт во фрагмент страница MCP-коннектора.
 const signed = 'eyJjbGllbnRfaWQiOiJtY3AiLCJzdGF0ZSI6IjQyIn0.Vf3kQ9xLm2Rp8ZtB7wYc1HsN4aJd6GuE0qOi5TnKyXw'
 
+/** Текст чистится как ожидается, и второй проход его уже не меняет. */
+function assertScrubs(cases) {
+	for (const [text, scrubbed] of cases) {
+		assert.equal(scrubText(text), scrubbed, text)
+		assert.equal(scrubText(scrubbed), scrubbed, `${text} once more`)
+	}
+}
+
+/** Псевдослучайные строки из алфавита: одни и те же на каждом прогоне. */
+function randomStrings(alphabet, length, count) {
+	let seed = 42
+	const next = () => {
+		seed = (seed + 0x6d2b79f5) | 0
+		let t = Math.imul(seed ^ (seed >>> 15), 1 | seed)
+		t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+		return ((t ^ (t >>> 14)) >>> 0) / 2 ** 32
+	}
+
+	return Array.from({ length: count }, () =>
+		Array.from({ length }, () => alphabet[Math.floor(next() * alphabet.length)]).join(''),
+	)
+}
+
 test('file addresses and the page address lose the query and the fragment', () => {
 	const page = 'https://site.example/page?token=1#top'
 	const event = {
@@ -45,7 +68,7 @@ test('the signed request in the fragment of an MCP connector page stays out of t
 })
 
 test('text loses headers, named secrets, values of URL parameters and tokens', () => {
-	for (const [text, scrubbed] of [
+	assertScrubs([
 		[
 			'Failed at https://site.example/connect?code=abc&state=42#request=xyz',
 			'Failed at https://site.example/connect?code=[Filtered]&state=[Filtered]#request=[Filtered]',
@@ -73,9 +96,154 @@ test('text loses headers, named secrets, values of URL parameters and tokens', (
 		['reset /reset/8f14e45fceea167a5a36dedd4bea2543 expired', 'reset /reset/[Filtered] expired'],
 		['invite 550e8400-e29b-41d4-a716-446655440000', 'invite [Filtered]'],
 		['id a1B2c3D4e5F6g7H8i9J0kLmN', 'id [Filtered]'],
+	])
+})
+
+test('pairs with short and compound secret names lose values too', () => {
+	assertScrubs([
+		['login failed pwd=hunter2 user=bob', 'login failed pwd=[Filtered] user=bob'],
+		['{"user":"bob","pass":"hunter2"}', '{"user":"bob","pass":"[Filtered]"}'],
+		['{"passphrase":"correct horse battery staple"}', '{"passphrase":"[Filtered]"}'],
+		['unlock failed, pin=4821', 'unlock failed, pin=[Filtered]'],
+		['otp=482173 expired', 'otp=[Filtered] expired'],
+		['{"auth":"Basic Ym9iOmh1bnRlcjI="}', '{"auth":"[Filtered]"}'],
+		['{"private_key":"MC4CAQAw"}', '{"private_key":"[Filtered]"}'],
+		['Invalid code: 482173', 'Invalid code: [Filtered]'],
+		['verificationCode=482173', 'verificationCode=[Filtered]'],
+		// Поле формы в скобках, хэш Ruby и JSON, экранированный дважды.
+		['user[password]=hunter2&user[email]=a@b.c', 'user[password]=[Filtered]&user[email]=[Filtered]'],
+		['{:password=>"hunter2"}', '{:password=>"[Filtered]"}'],
+		['{\\\\\\"password\\\\\\":\\\\\\"hunter2\\\\\\"}', '{\\\\\\"password\\\\\\":\\\\\\"[Filtered]\\\\\\"}'],
+	])
+
+	for (const text of [
+		'Author: Ann',
+		'status_code: 404',
+		'minPinLength=4',
+		'TokenExpiredError: jwt expired',
+		'AuthApiError: Invalid login credentials',
 	]) {
-		assert.equal(scrubText(text), scrubbed, text)
-		assert.equal(scrubText(scrubbed), scrubbed, `${text} once more`)
+		assert.equal(scrubText(text), text)
+	}
+
+	const [, args] = scrubEvent({
+		breadcrumbs: [
+			{
+				category: 'console',
+				data: {
+					arguments: [
+						'Unlock failed',
+						{
+							passphrase: 'correct horse',
+							pwd: 'hunter2',
+							pin: '4821',
+							auth: 'Basic Ym9i',
+							privateKey: 'k',
+							code: '4821',
+							statusCode: 500,
+						},
+					],
+				},
+			},
+		],
+	}).breadcrumbs[0].data.arguments
+
+	assert.deepEqual(args, {
+		passphrase: '[Filtered]',
+		pwd: '[Filtered]',
+		pin: '[Filtered]',
+		auth: '[Filtered]',
+		privateKey: '[Filtered]',
+		code: '[Filtered]',
+		statusCode: 500,
+	})
+})
+
+test('an object or an array under a secret name goes whole', () => {
+	assertScrubs([
+		[
+			'Save failed: {"secret":{"value":"hunter2"},"password":["hunter2"],"page":2}',
+			'Save failed: {"secret":[Filtered],"password":[Filtered],"page":2}',
+		],
+		['{"token":{"note":"a}b, \\"c\\""},"page":2}', '{"token":[Filtered],"page":2}'],
+		['{\\"secret\\":{\\"value\\":\\"a}b\\"},\\"page\\":2}', '{\\"secret\\":[Filtered],\\"page\\":2}'],
+		// Обрезанный текст: скобка не закрылась, значение идёт до конца.
+		['token: [abc, {"d": 1', 'token: [Filtered]'],
+	])
+})
+
+test('a value without quotes keeps its separators and spaces', () => {
+	assertScrubs([
+		['Login failed: password=Xy7;k=9,Qz&Tm', 'Login failed: password=[Filtered]'],
+		['password=pa=ss;word,more', 'password=[Filtered]'],
+		['Invalid password: correct horse battery staple', 'Invalid password: [Filtered]'],
+		['Login failed for bob with password: P@ss w0rd,2024', 'Login failed for bob with password: [Filtered]'],
+		// Следующая пара и текст после пробела остаются.
+		['{token: abc, page: 2}', '{token: [Filtered], page: 2}'],
+		['password=abc, then retry', 'password=[Filtered], then retry'],
+		['/login?password=abc&next=/home', '/login?password=[Filtered]&next=[Filtered]'],
+	])
+})
+
+test('values of Authorization and Cookie go whole with their quotes', () => {
+	assertScrubs([
+		['Cookie: sid="s3cr3t-value"; theme=dark', 'Cookie: [Filtered]'],
+		['Authorization: Digest username="bob", response="hunter2resp"', 'Authorization: [Filtered]'],
+		['{"raw":"Cookie: sid=1\\r\\nAccept: */*"}', '{"raw":"Cookie: [Filtered]\\r\\nAccept: */*"}'],
+	])
+})
+
+test('URL parameters lose values with quotes and parentheses, and the first one without ?', () => {
+	assertScrubs([
+		[
+			"Bad sign-in request: https://site.example/connect#request=AAAA'hunter2(and)more",
+			'Bad sign-in request: https://site.example/connect#request=[Filtered]',
+		],
+		[
+			"Failed (https://site.example/connect#request=a'b(c)d)",
+			'Failed (https://site.example/connect#request=[Filtered])',
+		],
+		["fetch 'https://site.example/?q=abc' failed", "fetch 'https://site.example/?q=[Filtered]' failed"],
+		['code=4821739&state=af0ifjsldkj', 'code=[Filtered]&state=[Filtered]'],
+		['request=AbCdEfGh.IjKl&state=xyz', 'request=[Filtered]&state=[Filtered]'],
+	])
+
+	assert.equal(scrubText('expected x=1'), 'expected x=1')
+})
+
+test('addresses lose the user name and the password', () => {
+	assertScrubs([['Failed: https://bob:hunter2@api.example.com/v1', 'Failed: https://[Filtered]@api.example.com/v1']])
+
+	assert.equal(scrubUrl('https://bob:hunter2@api.example.com/v1?x=1'), 'https://[Filtered]@api.example.com/v1')
+	assert.equal(
+		cleanBreadcrumb({ category: 'xhr', data: { url: 'https://bob:hunter2@api.example.com/v1/me' } }).data.url,
+		'https://[Filtered]@api.example.com/v1/me',
+	)
+})
+
+test('random strings go in any case, with or without digits, and split by base64 signs', () => {
+	assertScrubs([
+		['reset link /reset/k3j9x2m8q7w1z5v4b6n0c2d8f', 'reset link /reset/[Filtered]'],
+		['secret JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP', 'secret [Filtered]'],
+		['reset token AbCdEfGhIjKlMnOpQrStUvWxYz', 'reset token [Filtered]'],
+		['key wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY', 'key [Filtered]'],
+		['bot 123456789:AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw', 'bot 123456789:[Filtered]'],
+	])
+
+	// Из случайных строк уходит редкая, похожая на слово: из 20 символов -- пара
+	// процентов, из 43, как `randomBytes(32).toString('base64url')`, -- почти ни одной.
+	for (const [alphabet, length, share] of [
+		['ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_', 20, 0.05],
+		['ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_', 43, 0.005],
+		['ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/', 32, 0.01],
+		['abcdefghijklmnopqrstuvwxyz0123456789', 20, 0.02],
+		['ABCDEFGHIJKLMNOPQRSTUVWXYZ234567', 20, 0.05],
+		['ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz', 20, 0.02],
+	]) {
+		const strings = randomStrings(alphabet, length, 2000)
+		const kept = strings.filter((string) => scrubText(`see ${string} now`).includes(string))
+
+		assert.ok(kept.length <= strings.length * share, `${length} of ${alphabet}: ${kept.length} kept`)
 	}
 })
 
@@ -91,6 +259,11 @@ test('text keeps words, names and plain addresses', () => {
 		'/blog/2024-annual-report-and-financial-statements#section-2',
 		'body > div.data-astro-cid-j7pv25f6',
 		'Failed to fetch (api.example.com)',
+		// Имена API и констант, слова и хеши сборки в именах файлов.
+		'HTMLOrSVGScriptElement XMLHttpRequestEventTarget COMPRESSED_SRGB8_ALPHA8_ASTC_4x4_KHR',
+		'net::ERR_CONNECTION_REFUSED __webpack_require__ internationalization',
+		'https://site.example/assets/codeMirrorModule-BEB2e8M3.js',
+		'https://site.example/_astro/icon.Cpmtcd2K_21uGdy.avif',
 	]) {
 		assert.equal(scrubText(text), text)
 	}

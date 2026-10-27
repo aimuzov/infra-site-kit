@@ -82,3 +82,71 @@ test('an error event keeps no secrets of the address, requests, console and the 
 		},
 	])
 })
+
+test('secrets under short names, in JSON of the error text and in the user info of an address stay out', async ({
+	page,
+}) => {
+	const envelopes = []
+
+	await page.route('https://o42.ingest.us.sentry.io/**', async (route) => {
+		envelopes.push(route.request().postData())
+		await route.fulfill({ status: 200, body: '{}' })
+	})
+	await page.route('https://api.example.com/**', (route) => route.fulfill({ status: 500, body: '' }))
+	// Во фрагменте браузер оставляет `'`, `(` и `)` как есть.
+	await page.goto("/ui/sentry.html#request=AAAA'quoteSECRET(and)more")
+	await page.waitForFunction(() => console.warn.__sentry_original__)
+
+	await page.evaluate(async () => {
+		console.warn('Unlock failed', { passphrase: 'correct horse', pwd: 'hunter2', pin: '4821', auth: 'Basic Ym9i' })
+		console.warn('reset token', 'AbCdEfGhIjKlMnOpQrStUvWxYz')
+		await new Promise((resolve) => {
+			const xhr = new XMLHttpRequest()
+
+			xhr.open('GET', 'https://bob:hunter2@api.example.com/v1/me')
+			xhr.onloadend = resolve
+			xhr.send()
+		})
+		setTimeout(() => {
+			throw new Error(
+				`Save failed (${location.href}) ${JSON.stringify({ secret: { value: 'hunter2' }, page: 2 })}`,
+			)
+		})
+	})
+
+	await expect.poll(() => events(envelopes).length).toBe(1)
+
+	for (const body of envelopes) {
+		for (const secret of [
+			'hunter2',
+			'Ym9i',
+			'correct horse',
+			'4821',
+			'AbCdEfGhIjKlMnOpQrStUvWxYz',
+			'quoteSECRET',
+		]) {
+			expect(body).not.toContain(secret)
+		}
+	}
+
+	const [error] = events(envelopes)
+	const crumbs = error.breadcrumbs.map(({ category, data }) => ({ category, data }))
+
+	expect(error.exception.values[0].value).toMatch(
+		/^Save failed \(http:\/\/localhost:\d+\/ui\/sentry\.html#request=\[Filtered\]\) \{"secret":\[Filtered\],"page":2\}$/,
+	)
+	expect(crumbs).toEqual([
+		{
+			category: 'console',
+			data: {
+				logger: 'console',
+				arguments: [
+					'Unlock failed',
+					{ passphrase: '[Filtered]', pwd: '[Filtered]', pin: '[Filtered]', auth: '[Filtered]' },
+				],
+			},
+		},
+		{ category: 'console', data: { logger: 'console', arguments: ['reset token', '[Filtered]'] } },
+		{ category: 'xhr', data: { method: 'GET', url: 'https://[Filtered]@api.example.com/v1/me', status_code: 500 } },
+	])
+})
