@@ -40,10 +40,11 @@ const heading = (id, y) => ({ id, getBoundingClientRect: () => ({ top: y - page.
 // Треть окна -- 300 пикселей от верха.
 const doc = [heading('intro', 100), heading('setup', 500), heading('usage', 1400)]
 
-/** Контейнер со своей прокруткой: верх на `top`, видимая высота `height`. */
-function container(top, height) {
+/** Контейнер со своей прокруткой: верх рамки `top`, видимая высота `height`, рамка `border`. */
+function container(top, height, border = 0) {
 	return {
 		clientHeight: height,
+		clientTop: border,
 		/** @type {Record<string, Function>} */
 		listeners: {},
 		getBoundingClientRect: () => ({ top }),
@@ -107,6 +108,40 @@ test('in a container the line counts from its top and visible height', () => {
 
 	page.y = 200
 	assert.equal(currentSection(doc, { scroller })?.id, 'setup')
+})
+
+test('the container border is not part of its visible area', () => {
+	reset()
+
+	// Видимая область начинается под рамкой: 100 + 30, её треть -- ещё 200 пикселей ниже.
+	const scroller = container(100, 600, 30)
+
+	page.y = 169
+	assert.equal(currentSection(doc, { scroller })?.id, 'intro')
+
+	page.y = 170
+	assert.equal(currentSection(doc, { scroller })?.id, 'setup')
+})
+
+test('another window, such as a frame, gives its own height, scroll and resize', () => {
+	reset()
+
+	// Окно фрейма высотой 600: треть -- 200 пикселей от верха.
+	const frame = { innerHeight: 600, ...container(0, 0) }
+
+	page.y = 299
+	assert.equal(currentSection(doc, { scroller: frame })?.id, 'intro')
+
+	page.y = 300
+	assert.equal(currentSection(doc, { scroller: frame })?.id, 'setup')
+
+	const stop = watchSection(doc, () => {}, { scroller: frame })
+
+	assert.deepEqual(Object.keys(frame.listeners).sort(), ['resize', 'scroll'])
+	assert.deepEqual(Object.keys(page.listeners), [])
+
+	stop()
+	assert.deepEqual(Object.keys(frame.listeners), [])
 })
 
 test('the window passed as the scroller is the same as no scroller', () => {

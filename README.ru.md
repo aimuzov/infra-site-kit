@@ -327,7 +327,7 @@ import PanelToggle from '@aimuzov/infra-site-kit/ui/panel-toggle.svelte'
 
 	watchSection(document.querySelectorAll('article h2[id]'), (heading) => {
 		for (const link of links) {
-			if (link.hash === `#${encodeURIComponent(heading?.id ?? '')}`) link.setAttribute('aria-current', 'location')
+			if (decodeURIComponent(link.hash.slice(1)) === heading?.id) link.setAttribute('aria-current', 'location')
 			else link.removeAttribute('aria-current')
 		}
 	})
@@ -336,7 +336,7 @@ import PanelToggle from '@aimuzov/infra-site-kit/ui/panel-toggle.svelte'
 
 Линия по умолчанию — на трети видимой высоты от верха. Раздел становится текущим, когда его заголовок ушёл в верхнюю треть: к этому времени читают уже его текст. С линией под шапкой прошлый раздел горел бы, пока новый занимает почти весь экран, а короткий последний раздел не загорелся бы совсем: страница кончается раньше, чем его заголовок дойдёт до шапки.
 
-- `line` двигает линию: функция от видимой области `{ top, height }`, которая возвращает координату в окне, как `getBoundingClientRect().top`. Сайт, которому нужен раздел, ушедший под шапку, передаёт `line: () => parseFloat(getComputedStyle(document.documentElement).scrollPaddingTop) + 1`.
+- `line` двигает линию: функция от видимой области `{ top, height }`, которая возвращает координату в окне, как `getBoundingClientRect().top`. Сайт, которому нужен раздел, ушедший под шапку, и который держит её высоту в `scroll-padding-top`, передаёт `line: () => parseFloat(getComputedStyle(document.documentElement).scrollPaddingTop) + 1`. Без этого свойства там `auto`, линия становится `NaN`, и ничего не подсвечивается.
 - `scroller` — контейнер со своей прокруткой, например статья, открытая поверх страницы. Видимая область тогда — его рамка, и кит слушает его скролл.
 - Первый вызов — в ближайшем кадре, дальше по одному на каждую смену раздела, выше первого заголовка приходит `null`. Скроллы между двумя кадрами замеряются один раз, ресайз тоже замеряется. `watchSection` возвращает отписку.
 - Заголовки идут в порядке документа: массивом, `NodeList` или любым iterable.

@@ -327,7 +327,7 @@ A table of contents lights up the section being read. The current section is the
 
 	watchSection(document.querySelectorAll('article h2[id]'), (heading) => {
 		for (const link of links) {
-			if (link.hash === `#${encodeURIComponent(heading?.id ?? '')}`) link.setAttribute('aria-current', 'location')
+			if (decodeURIComponent(link.hash.slice(1)) === heading?.id) link.setAttribute('aria-current', 'location')
 			else link.removeAttribute('aria-current')
 		}
 	})
@@ -336,7 +336,7 @@ A table of contents lights up the section being read. The current section is the
 
 By default the line is a third of the visible height down from the top. A section turns current once its heading has gone into the upper third: by then the reader is on its text. With a line under the header the previous section would stay lit while the new one fills almost the whole screen, and a short last section would never light up, since the page ends before its heading reaches the header.
 
-- `line` moves the line: a function of the visible area `{ top, height }` that returns a y in window coordinates, like `getBoundingClientRect().top`. A site that wants the section its header has covered passes `line: () => parseFloat(getComputedStyle(document.documentElement).scrollPaddingTop) + 1`.
+- `line` moves the line: a function of the visible area `{ top, height }` that returns a y in window coordinates, like `getBoundingClientRect().top`. A site that wants the section its header has covered and keeps the header height in `scroll-padding-top` passes `line: () => parseFloat(getComputedStyle(document.documentElement).scrollPaddingTop) + 1`. Without the property its value is `auto`, the line turns into `NaN` and nothing lights up.
 - `scroller` is a container with a scroll of its own, such as an article opened over the page. The visible area is then the container box, and the kit follows its scroll.
 - The first call comes in the next frame, then one on each change of the section, with `null` above the first heading. Scrolls between two frames are measured once, a resize is measured too. `watchSection` returns the stop.
 - Headings go in document order, as an array, a `NodeList` or any iterable.

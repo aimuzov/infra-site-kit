@@ -24,15 +24,21 @@
 const third = ({ top, height }) => top + height / 3
 
 /**
- * @param {Window | HTMLElement | undefined} scroller
+ * Окно, в том числе окно фрейма: у элемента `innerHeight` нет.
+ * @param {Window | HTMLElement} scroller
+ * @returns {scroller is Window}
+ */
+const isWindow = (scroller) => 'innerHeight' in scroller
+
+/**
+ * @param {Window | HTMLElement} scroller
  * @returns {Viewport}
  */
 function viewportOf(scroller) {
-	if (!scroller || scroller === globalThis) return { top: 0, height: innerHeight }
+	if (isWindow(scroller)) return { top: 0, height: scroller.innerHeight }
 
-	const box = /** @type {HTMLElement} */ (scroller)
-
-	return { top: box.getBoundingClientRect().top, height: box.clientHeight }
+	// Видимая область контейнера начинается под его рамкой.
+	return { top: scroller.getBoundingClientRect().top + scroller.clientTop, height: scroller.clientHeight }
 }
 
 /**
@@ -40,7 +46,7 @@ function viewportOf(scroller) {
  * @param {T[]} headings
  * @param {SectionOptions} options
  */
-function measure(headings, { line = third, scroller }) {
+function measure(headings, { line = third, scroller = globalThis }) {
 	const y = line(viewportOf(scroller))
 
 	return headings.findLast((heading) => heading.getBoundingClientRect().top <= y) ?? null
@@ -70,6 +76,8 @@ export function currentSection(headings, options = {}) {
 export function watchSection(headings, callback, options = {}) {
 	const list = [...headings]
 	const target = options.scroller ?? globalThis
+	// Ресайз приходит окну, даже когда прокручивается контейнер.
+	const view = isWindow(target) ? target : globalThis
 	/** @type {T | null | undefined} */
 	let current
 	let frame = 0
@@ -90,7 +98,7 @@ export function watchSection(headings, callback, options = {}) {
 
 	target.addEventListener('scroll', schedule, { passive: true })
 	// Без скролла раздел меняется, когда текст перетекает под новую ширину.
-	addEventListener('resize', schedule)
+	view.addEventListener('resize', schedule)
 	// Первый замер тоже в кадре: скрипт мог запуститься, пока статья скрыта
 	// и у заголовков нет места на странице. Подсветка всё равно попадает
 	// в ту же отрисовку, что и при замере сразу.
@@ -99,6 +107,6 @@ export function watchSection(headings, callback, options = {}) {
 	return () => {
 		cancelAnimationFrame(frame)
 		target.removeEventListener('scroll', schedule)
-		removeEventListener('resize', schedule)
+		view.removeEventListener('resize', schedule)
 	}
 }
