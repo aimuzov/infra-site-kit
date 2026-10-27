@@ -1,0 +1,38 @@
+---
+// Ошибки браузера в Sentry. Ставится в <head>, по той же причине, что и metrika.astro:
+// он добавляет в CSP страницы адрес приёма Sentry. Без DSN и на dev-сервере
+// не выводит ничего, тогда и скрипт на страницу не попадает.
+import { sentryCsp, siteRelease } from './sentry.js'
+
+type Props = {
+	/** DSN проекта в Sentry. По умолчанию `PUBLIC_SENTRY_DSN` сборки. */
+	dsn?: string
+	/** Релиз, по умолчанию `<name>@<version>` из package.json сайта. */
+	release?: string
+	/** Окружение, по умолчанию `production`. */
+	environment?: string
+}
+
+const { dsn = import.meta.env.PUBLIC_SENTRY_DSN, release, environment = 'production' } = Astro.props
+const enabled = import.meta.env.PROD && Boolean(dsn)
+
+if (enabled) {
+	for (const directive of sentryCsp(dsn).directives) Astro.csp?.insertDirective(directive)
+}
+
+const config = enabled && JSON.stringify({ dsn, release: release ?? siteRelease(), environment })
+---
+
+{
+	enabled && (
+		<>
+			<meta name="sentry" content={config} />
+			<script>
+				import { bootSentry } from './sentry-boot.js'
+
+				const meta = document.querySelector('meta[name="sentry"]')
+				if (meta) bootSentry(JSON.parse(meta.content))
+			</script>
+		</>
+	)
+}
