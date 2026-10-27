@@ -1,0 +1,22 @@
+---
+// Версия страницы на языке браузера, если пользователь язык ещё не выбирал. Ставится в <head>
+// до стилей. Файлом, а не инлайн-скриптом, по той же причине, что и theme-boot.astro.
+// На страницах под префиксом языка ничего не выводит: ссылку на них дали нарочно.
+import { DEFAULT_LOCALE, LOCALE_COOKIE, LOCALES, localeOfPath } from './i18n.js'
+import boot from './locale-boot.js?url&no-inline'
+
+type Props = {
+	/** Языки сайта, если схема не та, что по умолчанию, как в `LangSwitch`. */
+	locales?: readonly string[]
+	defaultLocale?: string
+}
+
+const { locales = LOCALES, defaultLocale = DEFAULT_LOCALE } = Astro.props
+const others = locales.filter((locale) => locale !== defaultLocale)
+---
+
+{
+	localeOfPath(Astro.url.pathname, { locales, defaultLocale }) === defaultLocale && (
+		<script is:inline src={boot} data-cookie={LOCALE_COOKIE} data-locale={defaultLocale} data-locales={JSON.stringify(others)} />
+	)
+}

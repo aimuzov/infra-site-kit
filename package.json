@@ -51,6 +51,7 @@
 			"default": "./site/i18n.js"
 		},
 		"./i18n-head.astro": "./site/i18n-head.astro",
+		"./locale-boot.astro": "./site/locale-boot.astro",
 		"./metrika.astro": "./site/metrika.astro",
 		"./metrika-pixel.astro": "./site/metrika-pixel.astro",
 		"./changelog.js": {

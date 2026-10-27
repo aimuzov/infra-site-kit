@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import test from 'node:test'
+import vm from 'node:vm'
 
 import { render } from 'svelte/server'
 
@@ -59,6 +62,42 @@ test('язык из Accept-Language: по весам, по основному т
 	assert.equal(negotiateLocale('en;q=0'), 'ru')
 	assert.equal(negotiateLocale(''), 'ru')
 	assert.equal(negotiateLocale(undefined), 'ru')
+})
+
+const boot = readFileSync(join(import.meta.dirname, '..', 'site', 'locale-boot.js'), 'utf8')
+
+/** Прогоняет locale-boot на странице `path` и возвращает, куда он увёл, или `null`. */
+function runBoot({ languages, path = '/about', cookie = '', others = ['en'], locale = 'ru' }) {
+	let target = null
+
+	vm.runInNewContext(boot, {
+		document: { cookie, currentScript: { dataset: { cookie: 'lang', locale, locales: JSON.stringify(others) } } },
+		navigator: { languages },
+		location: { pathname: path, search: '?q=1', hash: '', replace: (href) => (target = href) },
+	})
+
+	return target
+}
+
+test('locale-boot уводит на язык браузера, только если пользователь не читает на языке по умолчанию', () => {
+	assert.equal(runBoot({ languages: ['en-US', 'en'] }), '/en/about?q=1')
+	assert.equal(runBoot({ languages: ['en'], path: '/' }), '/en/?q=1')
+	assert.equal(runBoot({ languages: ['de-DE', 'fr'] }), '/en/about?q=1')
+	assert.equal(runBoot({ languages: ['en-US', 'ru-RU'] }), null)
+	assert.equal(runBoot({ languages: ['RU'] }), null)
+	assert.equal(runBoot({ languages: [] }), null)
+	assert.equal(runBoot({ languages: ['ru'], locale: 'en', others: ['ru'] }), '/ru/about?q=1')
+})
+
+test('locale-boot не спорит с явным выбором в cookie', () => {
+	assert.equal(runBoot({ languages: ['en'], cookie: 'theme=dark; lang=ru' }), null)
+	assert.equal(runBoot({ languages: ['en'], cookie: 'xlang=ru' }), '/en/about?q=1')
+})
+
+test('locale-boot не уводит со страницы под префиксом, даже если это 404 из корня', () => {
+	assert.equal(runBoot({ languages: ['en'], path: '/en/missing' }), null)
+	assert.equal(runBoot({ languages: ['en'], path: '/en' }), null)
+	assert.equal(runBoot({ languages: ['en'], path: '/english' }), '/en/english?q=1')
 })
 
 test('без locale компоненты говорят по-русски, как раньше', () => {

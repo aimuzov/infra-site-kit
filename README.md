@@ -28,6 +28,7 @@ Shared CI, linter and e2e configs for the aimuzov sites built from [infra-site-t
 - [**Configs**](#configs) of Prettier, Stylelint (BEM included) and oxlint, with their plugins.
 - [**Author credit**](#author-credit): the shared footer line for Astro and Svelte.
 - [**Theme**](#theme): the theme switch logic and the script that applies the choice before the first paint.
+- [**Browser language**](#browser-language): a script that sends a visitor to the page in their browser language before the first paint.
 - [**Theme peek**](#theme-peek): a theme button that shows the other scheme in a circle around itself.
 - [**Base styles**](#base-styles): the root defaults, a steady scrollbar gutter and no tap highlight.
 - [**UI parts**](#ui-parts): Svelte buttons, cards, fields, alerts and a file dropzone on tokens a site maps to its palette.
@@ -180,6 +181,20 @@ import ThemeBoot from '@aimuzov/infra-site-kit/theme-boot.astro'
 - `nextTheme(theme, system)`: the theme a click will give, for the button label before the click.
 - `currentTheme()`, `systemScheme()`, `schemeOf(theme, system)`: what is chosen, what the system has and what is visible.
 - `watchTheme(callback)`: watches both the system and the attribute, so a second switch on the page hears about the click too. Calls back right away; returns the unsubscribe.
+
+## Browser language
+
+`locale-boot.astro` in `<head>`, before the styles, sends a visitor from a page in the default language to the same page in the browser language. The rule: the `lang` cookie (an explicit choice in `LangSwitch`) always wins, a visitor who reads the default language among their browser languages stays, the rest go to the first site language they read, or to the other one. On the server the shared Caddy does the same by `Accept-Language` (the `locale-redirect` snippet in infra-server), so the script is a fallback for `astro dev`, `preview` and hosting without that Caddy. It renders nothing on a page with a language prefix: a direct link there is followed as is. A same-origin file, like `theme-boot.astro`. A site with its own scheme passes `locales` and `defaultLocale`.
+
+```astro
+---
+import LocaleBoot from '@aimuzov/infra-site-kit/locale-boot.astro'
+---
+
+<head>
+	<LocaleBoot />
+</head>
+```
 
 ## Theme peek
 

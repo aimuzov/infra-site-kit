@@ -31,7 +31,7 @@
 		}
 	}
 
-	// Явный выбор запоминается cookie: сервер с ним больше не подбирает язык по `Accept-Language`.
+	// Явный выбор запоминается cookie: с ним ни Caddy, ни locale-boot не уводят на язык браузера.
 	function remember(/** @type {string} */ target) {
 		document.cookie = `${LOCALE_COOKIE}=${target}; path=/; max-age=31536000; samesite=lax`
 	}
