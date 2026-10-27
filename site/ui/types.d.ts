@@ -138,12 +138,22 @@ export type LangSwitchProps = {
  * В декларации компонента эта сигнатура стоит перед `Component`: svelte-check
  * берёт пропсы из последней, и в обратном порядке пропсы в Svelte-разметке
  * перестают проверяться.
+ *
+ * Функцию Astro в браузер не передаст, поэтому `client:*` запрещены у компонента
+ * с обязательным пропсом-функцией вроде `onfile` у Dropzone: такой оживляют
+ * изнутри Svelte-компонента.
  */
 export type AstroComponent<Props> = (
 	props: { [K in keyof Props]: K extends 'children' ? unknown : Props[K] } & {
-		[directive: `client:${string}`]: unknown
+		[directive: `client:${string}`]: [RequiredFunctionKeys<Omit<Props, 'children'>>] extends [never]
+			? unknown
+			: never
 	},
 ) => unknown
+
+type RequiredFunctionKeys<Props> = {
+	[K in keyof Props]-?: {} extends Pick<Props, K> ? never : Props[K] extends (...args: never[]) => unknown ? K : never
+}[keyof Props]
 
 export type ThemeToggleProps = {
 	/** Язык подписи для экранных читалок. */

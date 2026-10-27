@@ -4,11 +4,12 @@ import Badge from '@aimuzov/infra-site-kit/ui/badge.svelte'
 import Button from '@aimuzov/infra-site-kit/ui/button.svelte'
 import Card from '@aimuzov/infra-site-kit/ui/card.svelte'
 import ChipButton from '@aimuzov/infra-site-kit/ui/chip-button.svelte'
+import Dropzone from '@aimuzov/infra-site-kit/ui/dropzone.svelte'
 import ThemeToggle from '@aimuzov/infra-site-kit/ui/theme-toggle.svelte'
 
 import Panel from '../components/panel.svelte'
 
-// Пропсы проверяются и здесь: `tone` не из списка обязан дать ошибку.
+// Пропсы проверяются и здесь: ошибку обязаны дать `tone` не из списка и `client:*` у Dropzone.
 ---
 
 <ThemeToggle client:load locale="en" />
@@ -28,3 +29,5 @@ import Panel from '../components/panel.svelte'
 <Panel client:load />
 {/* @ts-expect-error */}
 <Card tone="nope">text</Card>
+{/* @ts-expect-error */}
+<Dropzone client:load onfile={(file) => console.log(file.name)} />

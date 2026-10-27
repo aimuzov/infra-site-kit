@@ -270,6 +270,8 @@ import Card from '@aimuzov/infra-site-kit/ui/card.svelte'
 </Card>
 ```
 
+A part with a required function prop, such as the dropzone with its `onfile`, takes no `client:*` on a page: Astro cannot hand a function to the browser. It comes to life inside a Svelte component, as in the example above.
+
 ## Search
 
 `ui/search.svelte` is site search on [Pagefind](https://pagefind.app): a magnifier button for the header and a dialog with the results. It opens by the button, Cmd/Ctrl-K and `/`; arrows move through the results, Enter opens one, Esc closes. A page with sections shows up to three of them, each linking right to its heading. It reads the `--ui-*` tokens like the other parts in `ui/`.
