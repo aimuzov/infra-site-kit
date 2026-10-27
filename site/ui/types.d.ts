@@ -1,6 +1,8 @@
 import type { Component, Snippet } from 'svelte'
 import type { HTMLButtonAttributes, HTMLInputAttributes } from 'svelte/elements'
 
+import type { Strings } from '../i18n.js'
+
 // Компоненты написаны на чистом JS, поэтому svelte-check на TypeScript-сайте видит их
 // импорт как `any`. Эти декларации дают им пропсы, по одной на компонент.
 
@@ -157,6 +159,20 @@ export type SearchProps = {
 	shortcut?: boolean
 	/** Срезать `.html` в адресах: для хостинга, который отдаёт `/page` по `page.html`. */
 	trimHtml?: boolean
+	/** Своя кнопка с лупой. Сайт с кнопкой в шапке выключает её и зовёт `open()`. */
+	button?: boolean
+	/** Крестик в строке. Без него остаётся крестик браузера, он чистит поле. */
+	closeButton?: boolean
+	/** Ctrl-j/k и Ctrl-n/p ходят по результатам, в любой раскладке. */
+	vimKeys?: boolean
+	/** Свои подписи поверх общих, по языкам: `{ en: { 'search.placeholder': 'Search docs' } }`. */
+	strings?: Strings
+	/** Что в начале строки вместо лупы, например `/` у сайта с vim-клавишами. */
+	prompt?: Snippet
+	/** Своё "ничего не нашлось": сниппет получает запрос. */
+	empty?: Snippet<[string]>
+	/** Окно закрылось: Esc, клик мимо, крестик или переход на результат. */
+	onclose?: () => void
 }
 
 export type PanelToggleProps = {

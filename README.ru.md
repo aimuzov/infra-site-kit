@@ -280,6 +280,22 @@ import Search from '@aimuzov/infra-site-kit/ui/search.svelte'
 - В `astro dev` индекса нет, окно так и пишет. Проверять поиск — в `astro build && pagefind --site dist && astro preview`.
 - Что индексировать, сайт размечает сам: `data-pagefind-body` на основном содержимом, `data-pagefind-ignore` на шапке и меню. Без разметки в индекс попадает вся страница.
 - `bundle` — путь к папке индекса, если сайт живёт не в корне. `limit` — сколько страниц показывать. `shortcut={false}` выключает горячие клавиши. `trimHtml` срезает `.html` в адресах результатов — для хостинга, который отдаёт `/page` по `page.html`; `index.html` срезается всегда.
+- Сайт со своей кнопкой в шапке ставит `button={false}` и открывает окно через `open()`, а `onclose` скажет ему, что окно закрылось. `shortcut={false}` отдаёт клавиши сайту, если он ловит их сам.
+- `strings` — свои подписи поверх общих, по языкам, как у `t()`. Сниппет `prompt` ставит в начало строки своё приглашение вместо лупы, `empty` — своё «ничего не нашлось». `closeButton={false}` убирает крестик, и поле чистит крестик браузера. `vimKeys` добавляет к стрелкам Ctrl-j/k и Ctrl-n/p, в любой раскладке.
+- Кроме токенов `--ui-*`, окно подстраивают свои переменные, а их умолчания дают нынешний вид: `--ui-search-top` — отступ сверху, `--ui-backdrop` — подложка, `--ui-search-title` и `--ui-search-text` — цвет заголовков и отрывков. `--ui-search-hit-border` даёт результату рамку этой ширины, у выбранного она цвета `--ui-hover-border`. Клавиши в подсказке скруглены не больше пунктов меню.
+
+```svelte
+<script>
+	import Search from '@aimuzov/infra-site-kit/ui/search.svelte'
+
+	let search
+</script>
+
+<button type="button" onclick={() => search.open()}>Поиск</button>
+<Search bind:this={search} locale="ru" button={false} vimKeys>
+	{#snippet prompt()}<span class="prompt">/</span>{/snippet}
+</Search>
+```
 
 ## Скрываемые панели
 

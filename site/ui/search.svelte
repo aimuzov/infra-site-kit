@@ -12,10 +12,30 @@
 	 * @property {number} [limit] Сколько страниц показывать, у каждой до трёх разделов.
 	 * @property {boolean} [shortcut] Открывать поиск по Cmd/Ctrl-K и `/`.
 	 * @property {boolean} [trimHtml] Срезать `.html` в адресах: для хостинга, который отдаёт `/page` по `page.html`.
+	 * @property {boolean} [button] Своя кнопка с лупой. Сайт с кнопкой в шапке выключает её и зовёт `open()`.
+	 * @property {boolean} [closeButton] Крестик в строке. Без него остаётся крестик браузера, он чистит поле.
+	 * @property {boolean} [vimKeys] Ctrl-j/k и Ctrl-n/p ходят по результатам, в любой раскладке.
+	 * @property {import('../i18n.js').Strings} [strings] Свои подписи поверх общих, по языкам.
+	 * @property {import('svelte').Snippet} [prompt] Что в начале строки вместо лупы, например `/` у сайта с vim-клавишами.
+	 * @property {import('svelte').Snippet<[string]>} [empty] Своё "ничего не нашлось": сниппет получает запрос.
+	 * @property {() => void} [onclose] Окно закрылось: Esc, клик мимо, крестик или переход на результат.
 	 */
 
 	/** @type {Props} */
-	let { locale = 'ru', bundle = '/pagefind/', limit = 8, shortcut = true, trimHtml = false } = $props()
+	let {
+		locale = 'ru',
+		bundle = '/pagefind/',
+		limit = 8,
+		shortcut = true,
+		trimHtml = false,
+		button = true,
+		closeButton = true,
+		vimKeys = false,
+		strings,
+		prompt,
+		empty,
+		onclose,
+	} = $props()
 
 	/** @typedef {{ url: string, page: string, section?: string, excerpt: string }} Hit */
 	/**
@@ -49,6 +69,12 @@
 	}
 	// Совпадения Pagefind размечает голым <mark>, а стилям нужен класс.
 	const marked = (/** @type {string} */ excerpt) => excerpt.replaceAll('<mark>', '<mark class="search__mark">')
+
+	/**
+	 * @param {string} key
+	 * @param {Record<string, string>} [vars]
+	 */
+	const text = (key, vars) => t(locale, `search.${key}`, vars, strings)
 
 	function load() {
 		// Адрес собирается в рантайме: при сборке сайта индекса ещё нет, и Vite не должен его искать.
@@ -147,11 +173,33 @@
 		tick().then(() => dialog.querySelector('.search__hit--active')?.scrollIntoView({ block: 'nearest' }))
 	}
 
+	/**
+	 * На сколько сдвинуть выбор: 1 вниз, -1 вверх, 0 не по клавише выбора.
+	 *
+	 * @param {KeyboardEvent} event
+	 */
+	function step(event) {
+		if (event.key === 'ArrowDown') return 1
+
+		if (event.key === 'ArrowUp') return -1
+
+		if (!vimKeys || !event.ctrlKey || event.shiftKey) return 0
+
+		// Код клавиши держит её место: в кириллице Ctrl-j приходит как "о", но с кодом `KeyJ`.
+		const is = (/** @type {string} */ letter) => event.key === letter || event.code === `Key${letter.toUpperCase()}`
+
+		if (is('j') || is('n')) return 1
+
+		return is('k') || is('p') ? -1 : 0
+	}
+
 	/** @param {KeyboardEvent} event */
 	function onKeydown(event) {
-		if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+		const delta = step(event)
+
+		if (delta) {
 			event.preventDefault()
-			move(event.key === 'ArrowDown' ? 1 : -1)
+			move(delta)
 		} else if (event.key === 'Enter') {
 			event.preventDefault()
 			go(hits[active])
@@ -185,34 +233,44 @@
 
 <svelte:document onkeydown={onShortcut} />
 
-<button class="search-button" type="button" aria-label={t(locale, 'search.open')} aria-haspopup="dialog" onclick={open}>
-	<SearchIcon size={14} aria-hidden="true" />
-</button>
+{#if button}
+	<button class="search-button" type="button" aria-label={text('open')} aria-haspopup="dialog" onclick={open}>
+		<SearchIcon size={14} aria-hidden="true" />
+	</button>
+{/if}
 
-<dialog bind:this={dialog} class="search" aria-label={t(locale, 'search.open')} onclick={onClick}>
+<dialog bind:this={dialog} class="search" aria-label={text('open')} onclick={onClick} {onclose}>
 	<div class="search__box">
 		<div class="search__bar">
-			<SearchIcon class="search__icon" size={16} aria-hidden="true" />
+			{#if prompt}
+				{@render prompt()}
+			{:else}
+				<SearchIcon class="search__icon" size={16} aria-hidden="true" />
+			{/if}
 			<input
 				bind:this={input}
 				bind:value={query}
 				class="search__input"
 				type="search"
-				placeholder={t(locale, 'search.placeholder')}
-				aria-label={t(locale, 'search.placeholder')}
+				placeholder={text('placeholder')}
+				aria-label={text('placeholder')}
 				autocomplete="off"
 				spellcheck="false"
 				onkeydown={onKeydown}
 			/>
-			<button class="search__close" type="button" aria-label={t(locale, 'search.closeLabel')} onclick={() => dialog.close()}>
-				<X size={16} aria-hidden="true" />
-			</button>
+			{#if closeButton}
+				<button class="search__close" type="button" aria-label={text('closeLabel')} onclick={() => dialog.close()}>
+					<X size={16} aria-hidden="true" />
+				</button>
+			{/if}
 		</div>
 
 		{#if unavailable}
-			<p class="search__note" role="status">{t(locale, 'search.unavailable')}</p>
+			<p class="search__note" role="status">{text('unavailable')}</p>
 		{:else if query.trim() && !hits.length && !pending}
-			<p class="search__note" role="status">{t(locale, 'search.empty', { query })}</p>
+			<p class="search__note" role="status">
+				{#if empty}{@render empty(query)}{:else}{text('empty', { query })}{/if}
+			</p>
 		{:else if hits.length}
 			<ul class="search__hits">
 				{#each hits as hit, index (hit.url)}
@@ -236,9 +294,9 @@
 		{/if}
 
 		<div class="search__footer">
-			<span><kbd class="search__key">↵</kbd> {t(locale, 'search.select')}</span>
-			<span><kbd class="search__key">↑</kbd><kbd class="search__key">↓</kbd> {t(locale, 'search.navigate')}</span>
-			<span><kbd class="search__key">esc</kbd> {t(locale, 'search.close')}</span>
+			<span><kbd class="search__key">↵</kbd> {text('select')}</span>
+			<span><kbd class="search__key">↑</kbd><kbd class="search__key">↓</kbd> {text('navigate')}</span>
+			<span><kbd class="search__key">esc</kbd> {text('close')}</span>
 		</div>
 	</div>
 </dialog>
@@ -272,7 +330,7 @@
 		width: min(560px, calc(100vw - 2 * var(--ui-gutter, 16px)));
 		max-width: none;
 		max-height: none;
-		margin: 10vh auto auto;
+		margin: var(--ui-search-top, 10vh) auto auto;
 		padding: 0;
 		border: 1px solid var(--ui-border);
 		border-radius: var(--ui-menu-radius, 12px);
@@ -281,7 +339,7 @@
 		box-shadow: var(--ui-menu-shadow, 0 12px 32px rgb(0 0 0 / 18%));
 
 		&::backdrop {
-			background: rgb(0 0 0 / 45%);
+			background: var(--ui-backdrop, rgb(0 0 0 / 45%));
 		}
 	}
 
@@ -336,18 +394,18 @@
 		@media (pointer: coarse) {
 			font-size: max(1rem, 1em);
 		}
+	}
 
-		/* Свой крестик браузера встал бы рядом с кнопкой закрытия и путал бы с ней. */
-		&::-webkit-search-cancel-button {
-			appearance: none;
-		}
+	/* Свой крестик браузера встал бы рядом с кнопкой закрытия и путал бы с ней. */
+	.search__bar:has(.search__close) .search__input::-webkit-search-cancel-button {
+		appearance: none;
 	}
 
 	.search__note {
 		margin: 0;
 		padding: 24px 16px;
 		font-size: 14px;
-		color: var(--ui-muted);
+		color: var(--ui-search-text, var(--ui-muted));
 		text-align: center;
 	}
 
@@ -361,11 +419,14 @@
 	.search__hit {
 		display: block;
 		padding: 8px 12px;
+		/* Рамки нет, пока сайт не задаст ей ширину. Цвет у выбранного -- `--ui-hover-border`. */
+		border: var(--ui-search-hit-border, 0) solid transparent;
 		border-radius: var(--ui-menu-item-radius, 8px);
 		color: var(--ui-fg);
 		text-decoration: none;
 
 		&--active {
+			border-color: var(--ui-hover-border);
 			background: var(--ui-hover-bg, var(--ui-surface));
 		}
 	}
@@ -375,6 +436,7 @@
 		display: block;
 		font-size: 14px;
 		font-weight: 600;
+		color: var(--ui-search-title, var(--ui-fg));
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
@@ -388,7 +450,7 @@
 		display: block;
 		font-size: 13px;
 		line-height: 20px;
-		color: var(--ui-muted);
+		color: var(--ui-search-text, var(--ui-muted));
 
 		& :global(.search__mark) {
 			color: var(--ui-fg);
@@ -413,7 +475,8 @@
 		margin-right: 4px;
 		padding: 0 4px;
 		border: 1px solid var(--ui-border);
-		border-radius: 4px;
+		/* Не круглее пункта меню: у угловатого сайта и клавиши угловатые. */
+		border-radius: min(4px, var(--ui-menu-item-radius, 8px));
 		font-family: inherit;
 	}
 </style>
