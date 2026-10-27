@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<title>Sentry</title>
+		<!-- То же, что выводит sentry.astro с DSN. Приём Sentry e2e подменяет через page.route. -->
+		<meta
+			name="sentry"
+			content='{"dsn":"https://abc123@o42.ingest.us.sentry.io/7","release":"stand@1.0.0","environment":"e2e"}'
+		/>
+		<script type="module" src="./sentry.js"></script>
+	</head>
+	<body>
+		<button type="button">Send</button>
+	</body>
+</html>
