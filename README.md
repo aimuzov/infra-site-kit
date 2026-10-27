@@ -34,6 +34,7 @@ Shared CI, linter and e2e configs for the aimuzov sites built from [infra-site-t
 - [**UI parts**](#ui-parts): Svelte buttons, cards, fields, alerts and a file dropzone on tokens a site maps to its palette.
 - [**Search**](#search) on Pagefind: a header button, a results dialog and keyboard shortcuts.
 - [**Collapsible panels**](#collapsible-panels): a button that hides a sidebar and a script that keeps the choice before the first paint.
+- [**Current section**](#current-section): the section being read, for a table of contents to light up.
 - [**Yandex Metrika**](#yandex-metrika) that loads after the first interaction and brings its own CSP sources.
 - [**Not-found page**](#not-found-page) with the author's face and suggestions from the sitemap.
 - [**Reader changelog**](#reader-changelog): the "Что нового" page, its format and the release PR check.
@@ -328,6 +329,33 @@ import PanelToggle from '@aimuzov/infra-site-kit/ui/panel-toggle.svelte'
 - `togglePanel`, `setPanelHidden`, `isPanelHidden` and `watchPanel` from `panels.js` are there for a button or key of the site's own.
 - `expectPanelToggle(page, button, { path })` from the kit checks: the button hides the panel, the choice survives a reload, a second click brings it back.
 
+## Current section
+
+A table of contents lights up the section being read. The current section is the last one whose heading has risen to a line; above the first heading there is none. The kit finds the section, the site decides what lighting up means: `aria-current` on a link, a marker sliding along the list, a history panel narrowed to the section.
+
+```astro
+<script>
+	import { watchSection } from '@aimuzov/infra-site-kit/section-spy.js'
+
+	const links = [...document.querySelectorAll('#toc a')]
+
+	watchSection(document.querySelectorAll('article h2[id]'), (heading) => {
+		for (const link of links) {
+			if (decodeURIComponent(link.hash.slice(1)) === heading?.id) link.setAttribute('aria-current', 'location')
+			else link.removeAttribute('aria-current')
+		}
+	})
+</script>
+```
+
+By default the line is a third of the visible height down from the top. A section turns current once its heading has gone into the upper third: by then the reader is on its text. With a line under the header the previous section would stay lit while the new one fills almost the whole screen, and a short last section would never light up, since the page ends before its heading reaches the header.
+
+- `line` moves the line: a function of the visible area `{ top, height }` that returns a y in window coordinates, like `getBoundingClientRect().top`. When the header height lives in `scroll-padding-top`, a site that wants the section the header has covered passes `line: () => parseFloat(getComputedStyle(document.documentElement).scrollPaddingTop) + 1`. Without the property its value is `auto`, the line turns into `NaN` and nothing lights up.
+- `scroller` is a container with a scroll of its own, such as an article opened over the page. The visible area is then the container box, and the kit follows its scroll.
+- The first call comes in the next frame, then one on each change of the section, with `null` above the first heading. Scrolls between two frames are measured once, a resize is measured too. `watchSection` returns the stop.
+- Headings go in document order, as an array, a `NodeList` or any iterable.
+- `currentSection(headings, options)` measures once, for opening another page at the same section.
+
 ## Yandex Metrika
 
 The counter loads `tag.js` on the first interaction or 4 s after `load`, so the ~85 KB script doesn't steal bandwidth from fonts and the first photo; earlier `ym` calls wait in a queue. Webvisor is off: on mobile it raises LCP.
@@ -470,7 +498,7 @@ npx playwright install chromium
 npm run test:e2e
 ```
 
-- Unit tests (`node --test`) run the configs against [`test/site`](test/site), which takes them by the package name the way a site does, and cover the credit year, the Metrika snippet, the theme peek math, the theme switch and the boot script.
+- Unit tests (`node --test`) run the configs against [`test/site`](test/site), which takes them by the package name the way a site does, and cover the credit year, the Metrika snippet, the theme peek math, the theme switch, the boot script and the current section line.
 - `npm run check` runs `astro check` and `svelte-check` against [`test/astro`](test/astro): the `ui/` parts on an Astro page with slots, in Svelte markup with snippets, and the props Svelte sees for each part.
 - The kit builds no Astro site, so e2e runs the shared checks against a two-page stand-in from [`test/e2e/server.mjs`](test/e2e/server.mjs): a sitemap with the production domain, a theme button with the peek and the deferred Metrika.
 
