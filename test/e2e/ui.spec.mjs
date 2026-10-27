@@ -177,6 +177,10 @@ test('search with the site button, prompt and labels moves by Ctrl-j/k and repor
 	await expect(input).toBeFocused()
 	await expect(dialog.locator('.stand-prompt')).toHaveText('/')
 	await expect(dialog.getByRole('button')).toHaveCount(0)
+	// Cmd/Ctrl-K первого поиска не открывает его поверх этого окна.
+	await page.keyboard.press('ControlOrMeta+k')
+	await expect(page.getByRole('dialog', { name: 'Поиск по сайту' })).toBeHidden()
+	await expect(input).toBeFocused()
 
 	await input.fill('пациенты')
 	await expect(hits).toHaveCount(2)

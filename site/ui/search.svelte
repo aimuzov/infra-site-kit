@@ -225,7 +225,8 @@
 
 	/** @param {KeyboardEvent} event */
 	function onShortcut(event) {
-		if (!shortcut || dialog.open) return
+		// Поверх другого окна, хоть второго поиска, Cmd/Ctrl-K ничего не открывает.
+		if (!shortcut || document.querySelector(':modal')) return
 
 		const target = /** @type {HTMLElement} */ (event.target)
 		// «/» в поле ввода -- это просто символ, а Cmd/Ctrl-K работает откуда угодно.
