@@ -2,7 +2,7 @@ import type { Component } from 'svelte'
 
 import type { AstroComponent, SearchProps } from './types.js'
 
-// Поиск ставят в шапку из Astro-layout, как и кнопку темы. `open()` открывает его из своей кнопки.
-declare const C: Component<SearchProps, { open: () => void }> & AstroComponent<SearchProps>
+// `open()` открывает поиск из своей кнопки.
+declare const C: AstroComponent<SearchProps> & Component<SearchProps, { open: () => void }>
 
 export default C

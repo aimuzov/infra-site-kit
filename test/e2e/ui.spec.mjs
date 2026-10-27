@@ -131,6 +131,16 @@ test('search opens by the button and by Cmd/Ctrl-K, finds a section and closes o
 	const dialog = page.getByRole('dialog', { name: 'Поиск по сайту' })
 	const input = dialog.getByRole('searchbox', { name: 'Что найти?' })
 
+	// Окно, открытое клавишей, тоже отдаёт фокус сразу:
+	// следующий "/" открывает его снова, а не уходит в скрытое поле.
+	await page.keyboard.press('/')
+	await expect(input).toBeFocused()
+	await page.keyboard.press('Escape')
+	await page.keyboard.press('/')
+	await expect(input).toBeFocused()
+	await page.keyboard.press('Escape')
+	await expect(dialog).toBeHidden()
+
 	await page.getByRole('button', { name: 'Поиск по сайту' }).click()
 	await expect(input).toBeFocused()
 
@@ -155,6 +165,47 @@ test('search opens by the button and by Cmd/Ctrl-K, finds a section and closes o
 	await expect(dialog).toBeVisible()
 	await input.fill('несуществующееслово')
 	await expect(dialog.getByRole('status')).toContainText('Ничего не нашлось')
+})
+
+test('search with the site button, prompt and labels moves by Ctrl-j/k and reports closing', async ({ page }) => {
+	const dialog = page.getByRole('dialog', { name: 'Поиск по стенду' })
+	const input = dialog.getByRole('searchbox', { name: 'Что ищем?' })
+	const hits = dialog.locator('.search__hit')
+
+	await expect(page.locator('.search-button')).toHaveCount(1)
+	await page.getByRole('button', { name: 'Найти в доках' }).click()
+	await expect(input).toBeFocused()
+	await expect(dialog.locator('.stand-prompt')).toHaveText('/')
+	await expect(dialog.getByRole('button')).toHaveCount(0)
+	// Cmd/Ctrl-K первого поиска не открывает его поверх этого окна.
+	await page.keyboard.press('ControlOrMeta+k')
+	await expect(page.getByRole('dialog', { name: 'Поиск по сайту' })).toBeHidden()
+	await expect(input).toBeFocused()
+
+	await input.fill('пациенты')
+	await expect(hits).toHaveCount(2)
+	await expect(hits.nth(0)).toHaveClass(/search__hit--active/)
+	// Стенд собран без postcss-nested: рамка выбранного проверяет, что стиль дошёл сам.
+	await expect(hits.nth(0)).toHaveCSS('border-top-color', 'rgb(255, 0, 0)')
+	await expect(hits.nth(1)).toHaveCSS('border-top-color', 'rgba(0, 0, 0, 0)')
+	await page.keyboard.press('Control+j')
+	await expect(hits.nth(1)).toHaveClass(/search__hit--active/)
+	await page.keyboard.press('Control+p')
+	await expect(hits.nth(0)).toHaveClass(/search__hit--active/)
+	// Ctrl-j в ЙЦУКЕН: символ "о", а код клавиши тот же.
+	await input.dispatchEvent('keydown', { key: 'о', code: 'KeyJ', ctrlKey: true })
+	await expect(hits.nth(1)).toHaveClass(/search__hit--active/)
+	// AltGr+N в польской раскладке -- буква "ń", выбор стоит на месте.
+	await input.dispatchEvent('keydown', { key: 'ń', code: 'KeyN', ctrlKey: true, altKey: true })
+	await expect(hits.nth(1)).toHaveClass(/search__hit--active/)
+
+	await input.fill('несуществующееслово')
+	await expect(dialog.getByRole('status')).toHaveText('Пусто: несуществующееслово')
+	await expect(dialog.getByRole('status').locator('strong')).toHaveText('несуществующееслово')
+
+	await page.keyboard.press('Escape')
+	await expect(dialog).toBeHidden()
+	await expect(page.locator('[data-closed]')).toHaveText('1')
 })
 
 test('the panel toggle hides its panel, keeps the choice over a reload and shows it back', async ({ page }) => {

@@ -16,9 +16,12 @@
 
 	let taken = $state('')
 	let value = $state('')
+	let closed = $state(0)
 
 	/** @type {{ pick: () => void }} */
 	let zone
+	/** @type {{ open: () => void }} */
+	let docs
 </script>
 
 <main style="display: grid; gap: 1rem; max-width: 40rem; margin: 2rem auto; padding: 0 1rem; font-family: system-ui">
@@ -26,6 +29,23 @@
 		<Search bundle="/ui/pagefind/" />
 		<LangSwitch locale="ru" path="/ui/" />
 		<PanelToggle panel="demo" controls="stand-panel" side="right" name="оглавление" prefix="stand" />
+	</div>
+	<div style="--ui-search-hit-border: 1px; --ui-hover-border: rgb(255 0 0)">
+		<button type="button" onclick={() => docs.open()}>Найти в доках</button>
+		<Search
+			bind:this={docs}
+			bundle="/ui/pagefind/"
+			button={false}
+			closeButton={false}
+			shortcut={false}
+			vimKeys
+			strings={{ ru: { 'search.open': 'Поиск по стенду', 'search.placeholder': 'Что ищем?' } }}
+			onclose={() => closed++}
+		>
+			{#snippet prompt()}<span class="stand-prompt">/</span>{/snippet}
+			{#snippet empty(query)}Пусто: <strong>{query}</strong>{/snippet}
+		</Search>
+		<span data-closed>{closed}</span>
 	</div>
 	<aside id="stand-panel">Панель стенда</aside>
 	<Card title="Выгрузка" info="Справка о выгрузке">
