@@ -19,6 +19,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run format:check
+      - run: npm run check
       - run: npm test
       # Браузер кешируем по версии Playwright,
       # а его системные библиотеки ставятся из apt каждый прогон.

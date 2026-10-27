@@ -1,7 +1,7 @@
 import type { Component } from 'svelte'
 
-import type { AlertProps } from './types.js'
+import type { AlertProps, AstroComponent } from './types.js'
 
-declare const C: Component<AlertProps>
+declare const C: AstroComponent<AlertProps> & Component<AlertProps>
 
 export default C

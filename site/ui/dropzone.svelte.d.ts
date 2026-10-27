@@ -1,7 +1,7 @@
 import type { Component } from 'svelte'
 
-import type { DropzoneExports, DropzoneProps } from './types.js'
+import type { AstroComponent, DropzoneExports, DropzoneProps } from './types.js'
 
-declare const C: Component<DropzoneProps, DropzoneExports>
+declare const C: AstroComponent<DropzoneProps> & Component<DropzoneProps, DropzoneExports>
 
 export default C

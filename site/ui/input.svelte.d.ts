@@ -1,7 +1,7 @@
 import type { Component } from 'svelte'
 
-import type { InputProps } from './types.js'
+import type { AstroComponent, InputProps } from './types.js'
 
-declare const C: Component<InputProps, {}, 'value'>
+declare const C: AstroComponent<InputProps> & Component<InputProps, {}, 'value'>
 
 export default C

@@ -131,9 +131,19 @@ export type LangSwitchProps = {
 
 /**
  * Вызов из Astro: он передаёт компоненту props вместе с `client:*` первым аргументом,
- * а сигнатура `Component` из Svelte ждёт первым служебный аргумент.
+ * а сигнатура `Component` из Svelte ждёт первым служебный аргумент. Содержимое
+ * между тегами Astro отдаёт слотом, а не сниппетом, поэтому `children` здесь
+ * принимает любую разметку.
+ *
+ * В декларации компонента эта сигнатура стоит перед `Component`: svelte-check
+ * берёт пропсы из последней, и в обратном порядке пропсы в Svelte-разметке
+ * перестают проверяться.
  */
-export type AstroComponent<Props> = (props: Props & { [directive: `client:${string}`]: unknown }) => unknown
+export type AstroComponent<Props> = (
+	props: { [K in keyof Props]: K extends 'children' ? unknown : Props[K] } & {
+		[directive: `client:${string}`]: unknown
+	},
+) => unknown
 
 export type ThemeToggleProps = {
 	/** Язык подписи для экранных читалок. */
