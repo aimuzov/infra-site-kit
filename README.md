@@ -527,7 +527,7 @@ npm run test:e2e
 
 - Unit tests (`node --test`) run the configs against [`test/site`](test/site), which takes them by the package name the way a site does, and cover the credit year, the Metrika snippet, the Sentry boot, release and CSP, the theme peek math, the theme switch, the boot script and the current section line.
 - `npm run check` runs `astro check` and `svelte-check` against [`test/astro`](test/astro): the `ui/` parts on an Astro page with slots, in Svelte markup with snippets, and the props Svelte sees for each part.
-- The kit has no Astro site, so e2e runs the shared checks against a two-page stand-in from [`test/e2e/server.mjs`](test/e2e/server.mjs): a sitemap with the production domain, a theme button with the peek and the deferred Metrika.
+- The kit builds no Astro site, so e2e runs the shared checks against a two-page stand-in from [`test/e2e/server.mjs`](test/e2e/server.mjs): a sitemap with the production domain, a theme button with the peek and the deferred Metrika.
 
 ## Versions
 
