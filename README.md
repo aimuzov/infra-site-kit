@@ -36,7 +36,7 @@ Shared CI, linter and e2e configs for the aimuzov sites built from [infra-site-t
 - [**Collapsible panels**](#collapsible-panels): a button that hides a sidebar and a script that keeps the choice before the first paint.
 - [**Current section**](#current-section): the section being read, for a table of contents to light up.
 - [**Yandex Metrika**](#yandex-metrika) that loads after the first interaction and brings its own CSP sources.
-- [**Sentry**](#sentry) for browser errors: no DSN, no script, and the SDK loads after `load`.
+- [**Sentry**](#sentry) for browser errors: no DSN, no script, and the SDK loads after `load`; source maps go to Sentry only when the build has a token.
 - [**Not-found page**](#not-found-page) with the author's face and suggestions from the sitemap.
 - [**Reader changelog**](#reader-changelog): the "Что нового" page, its format and the release PR check.
 - [**E2E tests**](#e2e-tests): the Playwright preset and the checks every site shares.
@@ -420,7 +420,29 @@ To turn it on for a site:
 2. Put `<Sentry />` into `<head>` of the shared layout.
 3. Add `PUBLIC_SENTRY_DSN=<dsn>` to `/srv/<project>/.env` on the projects server. The site is built there, in Docker, and that file reaches `astro build` as a build secret, so neither a GitHub Actions variable nor a workflow change is needed. Locally the variable may stay unset: the dev server has Sentry off anyway, and `astro build` without it renders nothing.
 
-Next step: upload source maps on release, so stack traces point at the source instead of the minified chunks.
+### Source maps
+
+Without source maps a stack trace in Sentry points at minified chunks in `/_astro/`. The `sentry-sourcemaps.js` integration uploads them on `astro build`, but only when the build has `SENTRY_AUTH_TOKEN`; without the token it does nothing, and the build is exactly what it was: no maps at all.
+
+```js
+// astro.config.mjs
+import sentrySourcemaps from '@aimuzov/infra-site-kit/sentry-sourcemaps.js'
+
+export default defineConfig({ integrations: [svelte(), sentrySourcemaps()] })
+```
+
+With the token the browser bundle gets hidden source maps (no `sourceMappingURL` in the chunks) and Debug IDs, which tie each chunk to its map. [`@sentry/vite-plugin`](https://www.npmjs.com/package/@sentry/vite-plugin) creates the release `<name>@<version>`, the same one `sentry.astro` puts into events, uploads the maps and deletes every `*.map` from `dist`, so they never reach the site. The release isn't written into the bundle a second time, commits aren't attached (the Docker build has no git), and the plugin sends no telemetry. The server build is skipped: its code never reaches the browser. A failed upload is a warning in the build log, not a failed deploy: the site works without maps, only its stack traces stay minified; the maps are deleted either way.
+
+The variables are read from the environment and from the site's `.env` files the way Vite reads them, the environment wins:
+
+| Variable            | Default                                                     |
+| ------------------- | ----------------------------------------------------------- |
+| `SENTRY_AUTH_TOKEN` | none, the integration is off                                |
+| `SENTRY_ORG`        | none, required: the CLI doesn't take the org from the token |
+| `SENTRY_PROJECT`    | `name` from the site's `package.json`                       |
+| `SENTRY_URL`        | `https://sentry.io`                                         |
+
+The integration takes the same names as options (`authToken`, `org`, `project`, `url`) plus `release`, if `<Sentry release>` is set by hand. The token is an organization auth token with the `org:ci` scope (releases and source maps). It is a secret: on the projects server it goes into `/srv/<project>/.env` next to `PUBLIC_SENTRY_DSN`, and that file reaches the build as a BuildKit secret, so it stays out of the image layers. Mind the prefix: `SENTRY_AUTH_TOKEN` has no `PUBLIC_`, so Vite never puts it into client code.
 
 ## Not-found page
 
@@ -541,7 +563,7 @@ npx playwright install chromium
 npm run test:e2e
 ```
 
-- Unit tests (`node --test`) run the configs against [`test/site`](test/site), which takes them by the package name the way a site does, and cover the credit year, the Metrika snippet, the Sentry boot, breadcrumbs, release and CSP, the theme peek math, the theme switch, the boot script and the current section line.
+- Unit tests (`node --test`) run the configs against [`test/site`](test/site), which takes them by the package name the way a site does, and cover the credit year, the Metrika snippet, the Sentry boot, breadcrumbs, release and CSP, the source maps upload switch, the theme peek math, the theme switch, the boot script and the current section line.
 - `npm run check` runs `astro check` and `svelte-check` against [`test/astro`](test/astro): the `ui/` parts on an Astro page with slots, in Svelte markup with snippets, and the props Svelte sees for each part.
 - The kit builds no Astro site, so e2e runs the shared checks against a two-page stand-in from [`test/e2e/server.mjs`](test/e2e/server.mjs): a sitemap with the production domain, a theme button with the peek and the deferred Metrika.
 
