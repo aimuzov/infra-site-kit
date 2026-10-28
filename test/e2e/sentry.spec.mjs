@@ -9,27 +9,67 @@ const signed = 'eyJjbGllbnRfaWQiOiJtY3AiLCJzdGF0ZSI6IjQyIn0.Vf3kQ9xLm2Rp8ZtB7wYc
 const token = 'Kx9_bT2mQpL0vW7zYc3NfA8sDe'
 const code = 'one-time-code-42'
 
-/** События из конвертов, которые SDK отправил в приём. */
-const events = (envelopes) =>
-	envelopes.flatMap((body) =>
-		body
-			.split('\n')
-			.map((line) => JSON.parse(line))
-			.filter((item) => item.exception),
-	)
+// Поля, которые `beforeSend` пропускает. SDK после него добавляет только `sdk`.
+const EVENT_KEYS = [
+	'event_id',
+	'timestamp',
+	'level',
+	'platform',
+	'logger',
+	'release',
+	'dist',
+	'environment',
+	'sdk',
+	'transaction',
+	'message',
+	'logentry',
+	'exception',
+	'breadcrumbs',
+	'request',
+	'contexts',
+	'tags',
+	'debug_meta',
+]
 
-test('an error event keeps no secrets of the address, requests, console and the error', async ({ page }) => {
-	const envelopes = []
+/** Конверты, которые SDK отправил в приём: заголовок и события. */
+const envelopes = (bodies) =>
+	bodies.map((body) => {
+		const [header, ...items] = body.split('\n').map((line) => JSON.parse(line))
+
+		return { header, events: items.filter((item) => item.exception) }
+	})
+
+const events = (bodies) => envelopes(bodies).flatMap(({ events }) => events)
+
+/** Подменяет приём Sentry и открывает стенд, когда SDK уже обернул консоль. */
+async function openStand(page, path) {
+	const bodies = []
 
 	await page.route('https://o42.ingest.us.sentry.io/**', async (route) => {
-		envelopes.push(route.request().postData())
+		bodies.push(route.request().postData())
 		await route.fulfill({ status: 200, body: '{}' })
 	})
-	await page.goto(`/ui/sentry.html?code=${code}#request=${signed}`)
+	await page.route('https://api.example.com/**', (route) => route.fulfill({ status: 500, body: '' }))
+	await page.goto(path)
 	// SDK грузится после load, когда браузер свободен, и при инициализации оборачивает консоль.
 	await page.waitForFunction(() => console.warn.__sentry_original__)
-	await page.getByRole('button', { name: 'Send' }).click()
 
+	return bodies
+}
+
+/** Ни в одном конверте нет секретов. */
+function expectNoSecrets(bodies, secrets) {
+	for (const body of bodies) {
+		for (const secret of secrets) {
+			expect(body).not.toContain(secret)
+		}
+	}
+}
+
+test('an error event keeps no secrets of the address, requests and console', async ({ page }) => {
+	const bodies = await openStand(page, `/ui/sentry.html?code=${code}#request=${signed}`)
+
+	await page.getByRole('button', { name: 'Send' }).click()
 	await page.evaluate(
 		async ({ signed, token }) => {
 			// Коннектор прочёл запрос из фрагмента и убрал его из адреса, потом фрагмент вернулся.
@@ -49,57 +89,36 @@ test('an error event keeps no secrets of the address, requests, console and the 
 			setTimeout(() => {
 				throw new Error(`Bad sign-in request: ${location.hash}`)
 			})
-			setTimeout(() => Promise.reject({ token }))
 		},
 		{ signed, token },
 	)
 
-	await expect.poll(() => events(envelopes).length).toBe(2)
+	await expect.poll(() => events(bodies).length).toBe(1)
+	expectNoSecrets(bodies, [signed.slice(0, 16), signed.slice(-16), token, code])
 
-	for (const body of envelopes) {
-		for (const secret of [signed.slice(0, 16), signed.slice(-16), token, code]) {
-			expect(body).not.toContain(secret)
-		}
-	}
-
-	const [error] = events(envelopes).filter(({ exception }) => exception.values[0].type === 'Error')
-	const [rejection] = events(envelopes).filter(({ extra }) => extra?.__serialized__)
-	const crumbs = error.breadcrumbs.map(({ category, level, data }) => ({ category, level, data }))
+	const [error] = events(bodies)
+	const crumbs = error.breadcrumbs.map(({ category, level, message, data }) => ({ category, level, message, data }))
 
 	expect(error.exception.values[0].value).toBe('Bad sign-in request: #request=[Filtered]')
-	expect(error.request.url).toMatch(/\/ui\/sentry\.html$/)
-	expect(rejection.extra.__serialized__).toEqual({ token: '[Filtered]' })
-	// Клики и `console.log` не сохраняются, у адресов нет query и фрагмента.
+	expect(error.request.url).toMatch(/^http:\/\/localhost:\d+\/ui\/sentry\.html$/)
+	// Клики и `console.log` не сохраняются, у адресов нет query и фрагмента,
+	// у консоли -- аргументов.
 	expect(crumbs).toEqual([
 		{ category: 'navigation', data: { from: '/ui/sentry.html', to: '/ui/sentry.html' } },
 		{ category: 'navigation', data: { from: '/ui/sentry.html', to: '/ui/sentry.html' } },
 		{ category: 'fetch', level: 'warning', data: { method: 'GET', url: '/ui/missing', status_code: 404 } },
 		{ category: 'xhr', level: 'warning', data: { method: 'GET', url: '/ui/missing', status_code: 404 } },
-		{
-			category: 'console',
-			level: 'warning',
-			data: { logger: 'console', arguments: ['retry with', { authToken: '[Filtered]' }, 'Bearer [Filtered]'] },
-		},
+		{ category: 'console', level: 'warning', message: 'retry with [object Object] Bearer [Filtered]' },
 	])
 })
 
-test('secrets under short names, in JSON of the error text and in the user info of an address stay out', async ({
-	page,
-}) => {
-	const envelopes = []
-
-	await page.route('https://o42.ingest.us.sentry.io/**', async (route) => {
-		envelopes.push(route.request().postData())
-		await route.fulfill({ status: 200, body: '{}' })
-	})
-	await page.route('https://api.example.com/**', (route) => route.fulfill({ status: 500, body: '' }))
+test('a thrown object, JSON in the error text and the user info of an address stay out', async ({ page }) => {
 	// Во фрагменте браузер оставляет `'`, `(` и `)` как есть.
-	await page.goto("/ui/sentry.html#request=AAAA'quoteSECRET(and)more")
-	await page.waitForFunction(() => console.warn.__sentry_original__)
+	const bodies = await openStand(page, "/ui/sentry.html#request=AAAA'quoteSECRET(and)more")
 
 	await page.evaluate(async () => {
-		console.warn('Unlock failed', { passphrase: 'correct horse', pwd: 'hunter2', pin: '4821', auth: 'Basic Ym9i' })
-		console.warn('reset token', 'AbCdEfGhIjKlMnOpQrStUvWxYz')
+		console.warn('Unlock failed', { passphrase: 'correct horse', pin: '4821' })
+		console.error(`Unlock failed: ${JSON.stringify({ user: 'bob', passphrase: 'correct horse', pin: '4821' })}`)
 		await new Promise((resolve) => {
 			const xhr = new XMLHttpRequest()
 
@@ -112,41 +131,59 @@ test('secrets under short names, in JSON of the error text and in the user info 
 				`Save failed (${location.href}) ${JSON.stringify({ secret: { value: 'hunter2' }, page: 2 })}`,
 			)
 		})
+		setTimeout(() => Promise.reject({ password: 'hunter2', profile: { apiKey: 'AbCdEfGhIjKlMn' } }), 50)
 	})
 
-	await expect.poll(() => events(envelopes).length).toBe(1)
+	await expect.poll(() => events(bodies).length).toBe(2)
+	expectNoSecrets(bodies, ['hunter2', 'correct horse', '4821', 'AbCdEfGhIjKlMn', 'quoteSECRET', '__serialized__'])
 
-	for (const body of envelopes) {
-		for (const secret of [
-			'hunter2',
-			'Ym9i',
-			'correct horse',
-			'4821',
-			'AbCdEfGhIjKlMnOpQrStUvWxYz',
-			'quoteSECRET',
-		]) {
-			expect(body).not.toContain(secret)
-		}
-	}
-
-	const [error] = events(envelopes)
-	const crumbs = error.breadcrumbs.map(({ category, data }) => ({ category, data }))
+	const [error, rejection] = events(bodies)
+	const crumbs = error.breadcrumbs.map(({ category, message, data }) => ({ category, message, data }))
 
 	expect(error.exception.values[0].value).toMatch(
-		/^Save failed \(http:\/\/localhost:\d+\/ui\/sentry\.html#request=\[Filtered\]\) \{"secret":\[Filtered\],"page":2\}$/,
+		/^Save failed \(http:\/\/localhost:\d+\/ui\/sentry\.html \{"secret \[Filtered\]$/,
 	)
+	expect(rejection.exception.values[0]).toMatchObject({
+		type: 'UnhandledRejection',
+		value: 'Object captured as promise rejection with keys: password [Filtered]',
+	})
+	expect(rejection.extra).toBeUndefined()
 	expect(crumbs).toEqual([
-		{
-			category: 'console',
-			data: {
-				logger: 'console',
-				arguments: [
-					'Unlock failed',
-					{ passphrase: '[Filtered]', pwd: '[Filtered]', pin: '[Filtered]', auth: '[Filtered]' },
-				],
-			},
-		},
-		{ category: 'console', data: { logger: 'console', arguments: ['reset token', '[Filtered]'] } },
-		{ category: 'xhr', data: { method: 'GET', url: 'https://[Filtered]@api.example.com/v1/me', status_code: 500 } },
+		{ category: 'console', message: 'Unlock failed [object Object]' },
+		{ category: 'console', message: 'Unlock failed: {"user":"bob","passphrase [Filtered]' },
+		{ category: 'xhr', data: { method: 'GET', url: 'https://api.example.com/v1/me', status_code: 500 } },
 	])
+})
+
+test('a plain error arrives with its type, short text and frames', async ({ page }) => {
+	const bodies = await openStand(page, '/ui/sentry.html')
+
+	await page.getByRole('button', { name: 'Break' }).click()
+	await expect.poll(() => events(bodies).length).toBe(1)
+
+	const [{ header, events: sent }] = envelopes(bodies)
+	const [error] = sent
+	const [exception] = error.exception.values
+
+	expect(exception.type).toBe('TypeError')
+	expect(exception.value).toBe("Cannot read properties of null (reading 'map')")
+	expect(exception.mechanism.handled).toBe(false)
+	expect(exception.mechanism.data).toBeUndefined()
+	expect(exception.stacktrace.frames).toContainEqual(
+		expect.objectContaining({
+			filename: expect.stringMatching(/^http:\/\/localhost:\d+\/ui\/assets\/sentry-[\w-]+\.js$/),
+			lineno: expect.any(Number),
+			colno: expect.any(Number),
+		}),
+	)
+	expect(error.release).toBe('stand@1.0.0')
+	expect(error.environment).toBe('e2e')
+	expect(Object.keys(error).filter((key) => !EVENT_KEYS.includes(key))).toEqual([])
+	expect(Object.keys(error.contexts)).toEqual(['trace'])
+	// Метаданные обработки SDK удалил из события, а трассу из них
+	// положил в заголовок конверта.
+	expect(header.trace.trace_id).toBe(error.contexts.trace.trace_id)
+	expect(bodies[0]).not.toContain('sdkProcessingMetadata')
+	// `userInfo: false`: Sentry не записывает IP посетителя.
+	expect(error.sdk.settings.infer_ip).toBe('never')
 })

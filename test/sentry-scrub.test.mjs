@@ -1,366 +1,325 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { cleanBreadcrumb, scrubEvent, scrubText, scrubUrl } from '../site/sentry-scrub.js'
+import { cleanBreadcrumb, cleanText, cleanUrl, scrubEvent } from '../site/sentry-scrub.js'
 
 // Подписанный запрос входа, как его кладёт во фрагмент страница MCP-коннектора.
 const signed = 'eyJjbGllbnRfaWQiOiJtY3AiLCJzdGF0ZSI6IjQyIn0.Vf3kQ9xLm2Rp8ZtB7wYc1HsN4aJd6GuE0qOi5TnKyXw'
 
 /** Текст чистится как ожидается, и второй проход его уже не меняет. */
-function assertScrubs(cases) {
-	for (const [text, scrubbed] of cases) {
-		assert.equal(scrubText(text), scrubbed, text)
-		assert.equal(scrubText(scrubbed), scrubbed, `${text} once more`)
+function assertCleans(cases) {
+	for (const [text, clean] of cases) {
+		assert.equal(cleanText(text), clean, text)
+		assert.equal(cleanText(clean), clean, `${text} once more`)
 	}
 }
 
-/** Псевдослучайные строки из алфавита: одни и те же на каждом прогоне. */
-function randomStrings(alphabet, length, count) {
-	let seed = 42
-	const next = () => {
-		seed = (seed + 0x6d2b79f5) | 0
-		let t = Math.imul(seed ^ (seed >>> 15), 1 | seed)
-		t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
-		return ((t ^ (t >>> 14)) >>> 0) / 2 ** 32
-	}
-
-	return Array.from({ length: count }, () =>
-		Array.from({ length }, () => alphabet[Math.floor(next() * alphabet.length)]).join(''),
-	)
-}
-
-test('file addresses and the page address lose the query and the fragment', () => {
-	const page = 'https://site.example/page?token=1#top'
-	const event = {
-		exception: {
-			values: [{ stacktrace: { frames: [{ filename: page, abs_path: page }, { filename: '<anonymous>' }] } }],
-		},
-		debug_meta: { images: [{ code_file: page }] },
-		request: { url: 'https://site.example/page#top' },
-	}
-
-	const [frame, anonymous] = scrubEvent(event).exception.values[0].stacktrace.frames
-
-	assert.equal(frame.filename, 'https://site.example/page')
-	assert.equal(frame.abs_path, 'https://site.example/page')
-	assert.equal(anonymous.filename, '<anonymous>')
-	assert.equal(event.debug_meta.images[0].code_file, 'https://site.example/page')
-	assert.deepEqual(event.request, { url: 'https://site.example/page' })
-	assert.deepEqual(scrubEvent({ message: 'plain' }), { message: 'plain' })
-})
-
-test('the signed request in the fragment of an MCP connector page stays out of the event', () => {
-	// Страница прочла фрагмент, убрала его из адреса и упала на разборе.
-	const breadcrumb = cleanBreadcrumb({
-		category: 'navigation',
-		data: { from: `/connect#request=${signed}`, to: '/connect' },
-	})
-	const event = scrubEvent({
-		exception: { values: [{ type: 'Error', value: `Bad sign-in request: #request=${signed}` }] },
-		request: { url: `https://site.example/connect#request=${signed}` },
-		breadcrumbs: [breadcrumb],
-	})
-
-	assert.equal(JSON.stringify(event).includes(signed.slice(0, 20)), false)
-	assert.equal(event.exception.values[0].value, 'Bad sign-in request: #request=[Filtered]')
-	assert.equal(event.request.url, 'https://site.example/connect')
-	assert.deepEqual(event.breadcrumbs[0].data, { from: '/connect', to: '/connect' })
-})
-
-test('text loses headers, named secrets, values of URL parameters and tokens', () => {
-	assertScrubs([
+test('an address loses the query, the fragment and the user info', () => {
+	for (const [url, clean] of [
+		[`https://site.example/connect?code=1#request=${signed}`, 'https://site.example/connect'],
+		['https://bob:hunter2@api.example.com/v1/me?x=1', 'https://api.example.com/v1/me'],
+		['https://bob:p@ss@api.example.com/v1', 'https://api.example.com/v1'],
+		['//bob@cdn.example.com/a.js', '//cdn.example.com/a.js'],
+		['/ui/missing?key=1#top', '/ui/missing'],
+		['/about/#team', '/about/'],
+		// Путь остаётся как есть: по нему Sentry ищет source maps.
 		[
-			'Failed at https://site.example/connect?code=abc&state=42#request=xyz',
-			'Failed at https://site.example/connect?code=[Filtered]&state=[Filtered]#request=[Filtered]',
+			'https://site.example/_astro/page.astro_astro_type_script_index_0_lang.BkS2x9aF.js',
+			'https://site.example/_astro/page.astro_astro_type_script_index_0_lang.BkS2x9aF.js',
 		],
-		['Authorization: Bearer abc.def', 'Authorization: [Filtered]'],
-		['{"Authorization":"Basic dXNlcjpwYXNz","Accept":"*/*"}', '{"Authorization":"[Filtered]","Accept":"*/*"}'],
+		['<anonymous>', '<anonymous>'],
+		['data:text/javascript;base64,cGFzc3dvcmQ9aHVudGVyMg==', 'data:text/javascript'],
+		['data:application/json,{"password":"hunter2"}', 'data:application/json'],
+		['data:,hunter2', 'data:'],
+		['blob:https://bob:hunter2@site.example:8080/550e8400-e29b-41d4', 'blob:https://site.example:8080'],
+		['blob:null/550e8400-e29b-41d4', 'blob:'],
+	]) {
+		assert.equal(cleanUrl(url), clean, url)
+	}
+
+	assert.equal(cleanUrl(`https://site.example/${'a'.repeat(3000)}`).length, 2048)
+	assert.equal(cleanUrl(42), undefined)
+	assert.equal(cleanUrl(undefined), undefined)
+})
+
+test('text is cut to 256 characters before anything else', () => {
+	const clean = cleanText(`Failed ${'a '.repeat(200)}`)
+
+	assert.equal(clean.length, 256)
+	assert.ok(clean.endsWith('…'))
+	assert.equal(cleanText('short'), 'short')
+	assert.equal(cleanText({ message: 'password=hunter2' }), undefined)
+	assert.equal(cleanText(42), undefined)
+	// Секрет за пределами первых 256 символов отрезан вместе с хвостом.
+	assert.equal(cleanText(`${'x'.repeat(300)} hunter2`).includes('hunter2'), false)
+})
+
+test('addresses in text lose the user info, the query and the fragment', () => {
+	assertCleans([
+		['Failed at https://bob:hunter2@api.example.com/v1 now', 'Failed at https://api.example.com/v1 now'],
+		[
+			'Failed at https://site.example/connect?code=abc&state=42#request=xyz now',
+			'Failed at https://site.example/connect now',
+		],
+		['GET /api/search?q=hunter2&page=2 failed', 'GET /api/search failed'],
+		['see page.html#request=abc then', 'see page.html then'],
+		// Во фрагменте браузер оставляет `'`, `(` и `)` как есть, значение они не обрывают.
+		["Failed (https://site.example/c#request=AAAA'hunter2(and)more) then", 'Failed (https://site.example/c then'],
+		['{"url":"https://site.example/?q=hunter2","page":2}', '{"url":"https://site.example/","page":2}'],
+		['Done?', 'Done?'],
+		['issue #42 is open', 'issue #42 is open'],
+	])
+})
+
+test('after a telling word everything to the end of the text goes', () => {
+	assertCleans([
+		['password=hunter2 for ann', 'password [Filtered]'],
+		['Login failed: passWord: correct horse battery staple', 'Login failed: passWord [Filtered]'],
+		['{"user":"bob","passphrase":"correct horse"}', '{"user":"bob","passphrase [Filtered]'],
+		['{"access_token": "abc", "page": 2}', '{"access_token [Filtered]'],
+		['Authorization: Basic Ym9iOmh1bnRlcjI=', 'Authorization [Filtered]'],
 		['retry with Bearer abc.def', 'retry with Bearer [Filtered]'],
-		["document.cookie = 'sid=1; theme=dark'", "document.cookie = '[Filtered]'"],
-		['Cookie: sid=1; theme=dark\nnext', 'Cookie: [Filtered]\nnext'],
-		['password=hunter2 for ann', 'password=[Filtered] for ann'],
-		['{"access_token": "abc", "page": 2}', '{"access_token": "[Filtered]", "page": 2}'],
-		['Invalid session: 42', 'Invalid session: [Filtered]'],
-		// Значение в кавычках целиком, с пробелами и запятыми.
-		['{"password": "my secret phrase"}', '{"password": "[Filtered]"}'],
-		["secretAnswer='first pet, Rex' given", "secretAnswer='[Filtered]' given"],
-		['password: "first\\"second phrase" next', 'password: "[Filtered]" next'],
-		// JSON, который сам лежит в строке с экранированными кавычками.
-		['{\\"password\\":\\"my secret\\",\\"page\\":2}', '{\\"password\\":\\"[Filtered]\\",\\"page\\":2}'],
-		['password: \\"secret phrase\\" next', 'password: \\"[Filtered]\\" next'],
-		['{\\"password\\":\\"first\\\\\\"second phrase\\"}', '{\\"password\\":\\"[Filtered]\\"}'],
-		// Пара внутри значения другой пары не прячется.
-		['{"error":"api_key=abc"}', '{"error":"api_key=[Filtered]"}'],
+		["document.cookie = 'sid=1; theme=dark'", 'document.cookie [Filtered]'],
+		['Invalid session: 42', 'Invalid session [Filtered]'],
+		['pwd=hunter2', 'pwd [Filtered]'],
+		['{"otp":"482173"}', '{"otp [Filtered]'],
+		['OAuth state mismatch: af0ifjsldkj', 'OAuth [Filtered]'],
+		['X-CSRF-Token: abc', 'X-CSRF [Filtered]'],
+		['jwt expired at 12:00', 'jwt [Filtered]'],
+		['{"private key": "MC4CAQAw"}', '{"private key [Filtered]'],
+		['Invalid credentials for bob', 'Invalid credentials [Filtered]'],
+		['bad signature 1f2e', 'bad signature [Filtered]'],
+		// Экранированный `\n` в JSON и значение в несколько строк конец не обрывают.
+		['Save failed {"secret":"a\\nb","page":2}', 'Save failed {"secret [Filtered]'],
+		['token: first line\nsecond line', 'token [Filtered]'],
+		// Слово в конце текста ничего за собой не прячет.
+		['Invalid token', 'Invalid token'],
+	])
+
+	for (const spelling of ['api_key', 'apiKey', 'api-key', 'API key', 'APIKEY']) {
+		assert.equal(cleanText(`${spelling}=abc`), `${spelling} [Filtered]`, spelling)
+	}
+
+	assert.equal(cleanText('Author: Ann'), 'Author: Ann')
+})
+
+test('JWTs and long random strings go', () => {
+	assertCleans([
 		[`token ${signed}`, 'token [Filtered]'],
-		['jwt eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.c2ln', 'jwt [Filtered]'],
-		['reset /reset/8f14e45fceea167a5a36dedd4bea2543 expired', 'reset /reset/[Filtered] expired'],
-		['invite 550e8400-e29b-41d4-a716-446655440000', 'invite [Filtered]'],
-		['id a1B2c3D4e5F6g7H8i9J0kLmN', 'id [Filtered]'],
-	])
-})
-
-test('pairs with short and compound secret names lose values too', () => {
-	assertScrubs([
-		['login failed pwd=hunter2 user=bob', 'login failed pwd=[Filtered] user=bob'],
-		['{"user":"bob","pass":"hunter2"}', '{"user":"bob","pass":"[Filtered]"}'],
-		['{"passphrase":"correct horse battery staple"}', '{"passphrase":"[Filtered]"}'],
-		['unlock failed, pin=4821', 'unlock failed, pin=[Filtered]'],
-		['otp=482173 expired', 'otp=[Filtered] expired'],
-		['{"auth":"Basic Ym9iOmh1bnRlcjI="}', '{"auth":"[Filtered]"}'],
-		['{"private_key":"MC4CAQAw"}', '{"private_key":"[Filtered]"}'],
-		['Invalid code: 482173', 'Invalid code: [Filtered]'],
-		['verificationCode=482173', 'verificationCode=[Filtered]'],
-		// Поле формы в скобках, хэш Ruby и JSON, экранированный дважды.
-		['user[password]=hunter2&user[email]=a@b.c', 'user[password]=[Filtered]&user[email]=[Filtered]'],
-		['{:password=>"hunter2"}', '{:password=>"[Filtered]"}'],
-		['{\\\\\\"password\\\\\\":\\\\\\"hunter2\\\\\\"}', '{\\\\\\"password\\\\\\":\\\\\\"[Filtered]\\\\\\"}'],
+		[`request ${signed} failed`, 'request [Filtered] failed'],
+		['header eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.c2ln ok', 'header [Filtered] ok'],
+		['reset /reset/8f14e45fceea167a5a36dedd4bea2543 expired', 'reset [Filtered] expired'],
+		['key wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY1 ok', 'key [Filtered] ok'],
+		['id a1B2c3D4e5F6g7H8i9J0kLmNa1B2c3D4e5F6 here', 'id [Filtered] here'],
 	])
 
+	// Без цифры или без буквы прогон -- не случайная строка, и короче 32 он тоже остаётся.
 	for (const text of [
-		'Author: Ann',
-		'status_code: 404',
-		'minPinLength=4',
-		'TokenExpiredError: jwt expired',
-		'AuthApiError: Invalid login credentials',
+		'internationalization_and_localization_tools',
+		'12345678901234567890123456789012345',
+		'id a1B2c3D4e5F6g7H8i9J0 here',
 	]) {
-		assert.equal(scrubText(text), text)
-	}
-
-	const [, args] = scrubEvent({
-		breadcrumbs: [
-			{
-				category: 'console',
-				data: {
-					arguments: [
-						'Unlock failed',
-						{
-							passphrase: 'correct horse',
-							pwd: 'hunter2',
-							pin: '4821',
-							auth: 'Basic Ym9i',
-							privateKey: 'k',
-							code: '4821',
-							statusCode: 500,
-						},
-					],
-				},
-			},
-		],
-	}).breadcrumbs[0].data.arguments
-
-	assert.deepEqual(args, {
-		passphrase: '[Filtered]',
-		pwd: '[Filtered]',
-		pin: '[Filtered]',
-		auth: '[Filtered]',
-		privateKey: '[Filtered]',
-		code: '[Filtered]',
-		statusCode: 500,
-	})
-})
-
-test('an object or an array under a secret name goes whole', () => {
-	assertScrubs([
-		[
-			'Save failed: {"secret":{"value":"hunter2"},"password":["hunter2"],"page":2}',
-			'Save failed: {"secret":[Filtered],"password":[Filtered],"page":2}',
-		],
-		['{"token":{"note":"a}b, \\"c\\""},"page":2}', '{"token":[Filtered],"page":2}'],
-		['{\\"secret\\":{\\"value\\":\\"a}b\\"},\\"page\\":2}', '{\\"secret\\":[Filtered],\\"page\\":2}'],
-		// Обрезанный текст: скобка не закрылась, значение идёт до конца.
-		['token: [abc, {"d": 1', 'token: [Filtered]'],
-	])
-})
-
-test('a value without quotes keeps its separators and spaces', () => {
-	assertScrubs([
-		['Login failed: password=Xy7;k=9,Qz&Tm', 'Login failed: password=[Filtered]'],
-		['password=pa=ss;word,more', 'password=[Filtered]'],
-		['Invalid password: correct horse battery staple', 'Invalid password: [Filtered]'],
-		['Login failed for bob with password: P@ss w0rd,2024', 'Login failed for bob with password: [Filtered]'],
-		// Следующая пара и текст после пробела остаются.
-		['{token: abc, page: 2}', '{token: [Filtered], page: 2}'],
-		['password=abc, then retry', 'password=[Filtered], then retry'],
-		['/login?password=abc&next=/home', '/login?password=[Filtered]&next=[Filtered]'],
-	])
-})
-
-test('values of Authorization and Cookie go whole with their quotes', () => {
-	assertScrubs([
-		['Cookie: sid="s3cr3t-value"; theme=dark', 'Cookie: [Filtered]'],
-		['Authorization: Digest username="bob", response="hunter2resp"', 'Authorization: [Filtered]'],
-		['{"raw":"Cookie: sid=1\\r\\nAccept: */*"}', '{"raw":"Cookie: [Filtered]\\r\\nAccept: */*"}'],
-	])
-})
-
-test('URL parameters lose values with quotes and parentheses, and the first one without ?', () => {
-	assertScrubs([
-		[
-			"Bad sign-in request: https://site.example/connect#request=AAAA'hunter2(and)more",
-			'Bad sign-in request: https://site.example/connect#request=[Filtered]',
-		],
-		[
-			"Failed (https://site.example/connect#request=a'b(c)d)",
-			'Failed (https://site.example/connect#request=[Filtered])',
-		],
-		["fetch 'https://site.example/?q=abc' failed", "fetch 'https://site.example/?q=[Filtered]' failed"],
-		['code=4821739&state=af0ifjsldkj', 'code=[Filtered]&state=[Filtered]'],
-		['request=AbCdEfGh.IjKl&state=xyz', 'request=[Filtered]&state=[Filtered]'],
-	])
-
-	assert.equal(scrubText('expected x=1'), 'expected x=1')
-})
-
-test('addresses lose the user name and the password', () => {
-	assertScrubs([['Failed: https://bob:hunter2@api.example.com/v1', 'Failed: https://[Filtered]@api.example.com/v1']])
-
-	assert.equal(scrubUrl('https://bob:hunter2@api.example.com/v1?x=1'), 'https://[Filtered]@api.example.com/v1')
-	assert.equal(
-		cleanBreadcrumb({ category: 'xhr', data: { url: 'https://bob:hunter2@api.example.com/v1/me' } }).data.url,
-		'https://[Filtered]@api.example.com/v1/me',
-	)
-})
-
-test('random strings go in any case, with or without digits, and split by base64 signs', () => {
-	assertScrubs([
-		['reset link /reset/k3j9x2m8q7w1z5v4b6n0c2d8f', 'reset link /reset/[Filtered]'],
-		['secret JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP', 'secret [Filtered]'],
-		['reset token AbCdEfGhIjKlMnOpQrStUvWxYz', 'reset token [Filtered]'],
-		['key wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY', 'key [Filtered]'],
-		['bot 123456789:AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw', 'bot 123456789:[Filtered]'],
-	])
-
-	// Из случайных строк уходит редкая, похожая на слово: из 20 символов -- пара
-	// процентов, из 43, как `randomBytes(32).toString('base64url')`, -- почти ни одной.
-	for (const [alphabet, length, share] of [
-		['ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_', 20, 0.05],
-		['ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_', 43, 0.005],
-		['ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/', 32, 0.01],
-		['abcdefghijklmnopqrstuvwxyz0123456789', 20, 0.02],
-		['ABCDEFGHIJKLMNOPQRSTUVWXYZ234567', 20, 0.05],
-		['ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz', 20, 0.02],
-	]) {
-		const strings = randomStrings(alphabet, length, 2000)
-		const kept = strings.filter((string) => scrubText(`see ${string} now`).includes(string))
-
-		assert.ok(kept.length <= strings.length * share, `${length} of ${alphabet}: ${kept.length} kept`)
+		assert.equal(cleanText(text), text)
 	}
 })
 
-test('text keeps words, names and plain addresses', () => {
+test('plain error text still reads', () => {
 	for (const text of [
 		"Cannot read properties of undefined (reading 'map')",
-		"Failed to execute 'drawImage' on 'OffscreenCanvasRenderingContext2D'",
+		"Failed to execute 'drawImage' on 'CanvasRenderingContext2D'",
 		'WebGL2RenderingContext is not defined',
-		`Unexpected token '<', "<!doctype "... is not valid JSON`,
-		"Failed to read the 'sessionStorage' property from 'Window'",
-		'Author: Ann',
-		'https://site.example/_astro/page.astro_astro_type_script_index_0_lang.BkS2x9aF.js',
-		'/blog/2024-annual-report-and-financial-statements#section-2',
-		'body > div.data-astro-cid-j7pv25f6',
 		'Failed to fetch (api.example.com)',
-		// Имена API и констант, слова и хеши сборки в именах файлов.
-		'HTMLOrSVGScriptElement XMLHttpRequestEventTarget COMPRESSED_SRGB8_ALPHA8_ASTC_4x4_KHR',
-		'net::ERR_CONNECTION_REFUSED __webpack_require__ internationalization',
-		'https://site.example/assets/codeMirrorModule-BEB2e8M3.js',
-		'https://site.example/_astro/icon.Cpmtcd2K_21uGdy.avif',
+		'net::ERR_CONNECTION_REFUSED',
+		'Author: Ann',
 	]) {
-		assert.equal(scrubText(text), text)
+		assert.equal(cleanText(text), text)
 	}
 })
 
-test('a page address loses the query, the fragment and a token in the path', () => {
-	assert.equal(
-		scrubUrl(`https://site.example/invite/${signed.slice(-40)}?x=1#top`),
-		'https://site.example/invite/[Filtered]',
-	)
-	assert.equal(scrubUrl('/about/#team'), '/about/')
-})
-
-test('the request keeps the address and headers without cookies, query, body and secrets', () => {
-	const { request } = scrubEvent({
+test('an event is built only of the fields on the list', () => {
+	const page = `https://bob:hunter2@site.example/connect?code=1#request=${signed}`
+	const event = scrubEvent({
+		event_id: 'a1b2',
+		timestamp: 1_700_000_000,
+		level: 'error',
+		platform: 'javascript',
+		release: 'site@1.2.3',
+		environment: 'production',
+		sdk: { name: 'sentry.javascript.browser', version: '11.8.0', integrations: ['Breadcrumbs'] },
+		sdkProcessingMetadata: { dynamicSamplingContext: { trace_id: 'f00d' } },
+		transaction: '/connect?code=1',
+		message: 'saved with token=abc',
+		logentry: { message: 'saved %s', params: ['password=abc'] },
+		exception: {
+			values: [
+				{
+					type: 'TokenExpiredError',
+					value: 'jwt expired',
+					module: 'auth',
+					mechanism: { type: 'onerror', handled: false, data: { password: 'hunter2' } },
+					stacktrace: {
+						frames: [
+							{
+								filename: page,
+								abs_path: page,
+								function: 'HTMLButtonElement.<anonymous>',
+								lineno: 1,
+								colno: 2,
+								in_app: true,
+								pre_context: ['const password = "hunter2"'],
+								context_line: 'login(password)',
+								post_context: ['}'],
+								vars: { password: 'hunter2' },
+							},
+							{ filename: '<anonymous>', function: 'new Foo' },
+							{ function: 'Object.foo [as bar]' },
+							{ function: 'password hunter2' },
+							{ function: 'render\n\thunter2' },
+							{ function: 'a'.repeat(201) },
+						],
+					},
+				},
+				{ type: 'Error: password=hunter2', value: 'boom' },
+				{ value: 'boom' },
+			],
+		},
+		breadcrumbs: [
+			{ category: 'ui.click', message: 'body > form.login > input[name="password"]' },
+			{
+				timestamp: 1,
+				category: 'console',
+				level: 'warning',
+				message: 'retry Bearer abc',
+				data: { logger: 'console', arguments: ['retry', { authToken: 'abc' }] },
+			},
+		],
 		request: {
-			url: 'https://site.example/page?q=1',
+			url: page,
 			method: 'POST',
 			cookies: { sid: '1' },
-			query_string: 'q=1',
+			query_string: 'code=1',
 			data: { email: 'ann@example.com' },
 			headers: {
 				Authorization: 'Bearer abc',
 				Cookie: 'sid=1',
-				'X-CSRF-Token': 'abc',
 				Referer: 'https://site.example/from?code=abc',
 				'User-Agent': 'Mozilla/5.0',
 			},
 		},
+		contexts: {
+			trace: { trace_id: 'f00d', span_id: 'beef', data: { password: 'hunter2' } },
+			culture: { locale: 'ru-RU', timezone: 'Europe/Moscow' },
+		},
+		tags: { section: 'blog', 'note.text': 'token=abc', 'bad key': 'x', count: 2 },
+		debug_meta: { images: [{ type: 'sourcemap', debug_id: 'd1', code_file: page, extra: 'x' }] },
+		// Так SDK присылает объект, брошенный вместо ошибки.
+		extra: { __serialized__: { password: 'hunter2' } },
+		user: { email: 'ann@example.com', ip_address: '1.2.3.4' },
+		fingerprint: ['hunter2'],
+		modules: { react: '19' },
+		unknown: 'hunter2',
 	})
 
-	assert.deepEqual(request, {
-		url: 'https://site.example/page',
-		headers: {
-			Authorization: '[Filtered]',
-			Cookie: '[Filtered]',
-			'X-CSRF-Token': '[Filtered]',
-			Referer: 'https://site.example/from?code=[Filtered]',
-			'User-Agent': 'Mozilla/5.0',
+	const clean = 'https://site.example/connect'
+
+	assert.deepEqual(event, {
+		event_id: 'a1b2',
+		timestamp: 1_700_000_000,
+		level: 'error',
+		platform: 'javascript',
+		release: 'site@1.2.3',
+		environment: 'production',
+		sdk: { name: 'sentry.javascript.browser', version: '11.8.0', integrations: ['Breadcrumbs'] },
+		sdkProcessingMetadata: { dynamicSamplingContext: { trace_id: 'f00d' } },
+		transaction: '/connect',
+		message: 'saved with token [Filtered]',
+		logentry: { message: 'saved %s' },
+		exception: {
+			values: [
+				{
+					type: 'TokenExpiredError',
+					value: 'jwt [Filtered]',
+					mechanism: { type: 'onerror', handled: false },
+					stacktrace: {
+						frames: [
+							{
+								filename: clean,
+								abs_path: clean,
+								function: 'HTMLButtonElement.<anonymous>',
+								lineno: 1,
+								colno: 2,
+								in_app: true,
+							},
+							{ filename: '<anonymous>', function: 'new Foo' },
+							{ function: 'Object.foo [as bar]' },
+						],
+					},
+				},
+				{ type: 'Error', value: 'boom' },
+				{ type: 'Error', value: 'boom' },
+			],
 		},
+		breadcrumbs: [{ timestamp: 1, category: 'console', level: 'warning', message: 'retry Bearer [Filtered]' }],
+		request: { url: clean, headers: { 'User-Agent': 'Mozilla/5.0', Referer: 'https://site.example/from' } },
+		contexts: { trace: { trace_id: 'f00d', span_id: 'beef' } },
+		tags: { section: 'blog', 'note.text': 'token [Filtered]' },
+		debug_meta: { images: [{ type: 'sourcemap', debug_id: 'd1', code_file: clean }] },
 	})
+	assert.equal(JSON.stringify(event).includes('hunter2'), false)
 })
 
-test('serialized objects, log entries and console arguments lose secrets', () => {
-	const event = scrubEvent({
-		message: 'saved with token=abc',
-		logentry: { message: 'saved %s', params: ['password=abc'] },
-		// Так SDK присылает объект, брошенный вместо ошибки.
-		extra: { __serialized__: { password: 'hunter2', user: { apiKey: 'abc', name: 'Ann' }, list: ['Bearer abc'] } },
-		breadcrumbs: [
-			{
-				category: 'console',
-				level: 'warning',
-				message: 'retry Bearer abc',
-				data: { logger: 'console', arguments: ['retry', { authToken: 'abc', step: 2 }] },
-			},
-			{ category: 'fetch', data: { method: 'GET', url: 'https://api.example/search?q=1#top', status_code: 200 } },
-		],
-	})
-
-	assert.equal(event.message, 'saved with token=[Filtered]')
-	assert.deepEqual(event.logentry, { message: 'saved %s', params: ['password=[Filtered]'] })
-	assert.deepEqual(event.extra, {
-		__serialized__: {
-			password: '[Filtered]',
-			user: { apiKey: '[Filtered]', name: 'Ann' },
-			list: ['Bearer [Filtered]'],
+test('an event without optional fields stays small', () => {
+	assert.deepEqual(scrubEvent({ event_id: 'a1b2', message: 'plain' }), { event_id: 'a1b2', message: 'plain' })
+	assert.deepEqual(
+		scrubEvent({ event_id: 'a1b2', request: { headers: { Cookie: 'sid=1' } }, tags: { 'a b': 'x' } }),
+		{
+			event_id: 'a1b2',
 		},
-	})
-	assert.equal(event.breadcrumbs[0].message, 'retry Bearer [Filtered]')
-	assert.deepEqual(event.breadcrumbs[0].data.arguments, ['retry', { authToken: '[Filtered]', step: 2 }])
-	assert.equal(event.breadcrumbs[1].data.url, 'https://api.example/search')
+	)
 })
 
 test('breadcrumbs keep requests and navigation without the query and the fragment', () => {
-	const fetch = cleanBreadcrumb({
+	assert.deepEqual(
+		cleanBreadcrumb({
+			timestamp: 1,
+			category: 'fetch',
+			type: 'http',
+			level: 'warning',
+			data: {
+				method: 'GET',
+				url: 'https://api.example/search?q=secret#top',
+				status_code: 404,
+				request_body_size: 10,
+				__span: 'abc',
+			},
+		}),
+		{
+			timestamp: 1,
+			category: 'fetch',
+			type: 'http',
+			level: 'warning',
+			data: { method: 'GET', url: 'https://api.example/search', status_code: 404 },
+		},
+	)
+	assert.deepEqual(
+		cleanBreadcrumb({ category: 'xhr', data: { url: 'https://bob:hunter2@api.example/me?token=1' } }),
+		{
+			category: 'xhr',
+			data: { url: 'https://api.example/me' },
+		},
+	)
+	assert.deepEqual(
+		cleanBreadcrumb({ category: 'navigation', data: { from: `/connect#request=${signed}`, to: '/b?x=1' } }),
+		{ category: 'navigation', data: { from: '/connect', to: '/b' } },
+	)
+	// Метод и статус только в своём виде.
+	assert.deepEqual(cleanBreadcrumb({ category: 'fetch', data: { method: 'GET password', status_code: '200' } }), {
 		category: 'fetch',
-		data: { method: 'GET', url: 'https://api.example/search?q=secret#top', status_code: 200 },
 	})
-
-	assert.deepEqual(fetch.data, { method: 'GET', url: 'https://api.example/search', status_code: 200 })
-
-	const xhr = cleanBreadcrumb({ category: 'xhr', data: { url: '/api?token=1' } })
-
-	assert.equal(xhr.data.url, '/api')
-
-	const navigation = cleanBreadcrumb({ category: 'navigation', data: { from: '/a?x=1', to: '/b#anchor' } })
-
-	assert.deepEqual(navigation.data, { from: '/a', to: '/b' })
-
-	const sentry = { category: 'sentry.event', message: 'Error: boom' }
-
-	assert.equal(cleanBreadcrumb(sentry), sentry)
-
-	const warning = cleanBreadcrumb({ category: 'console', level: 'warning', message: 'retry with token=abc' })
-
-	assert.equal(warning.message, 'retry with token=[Filtered]')
+	assert.deepEqual(cleanBreadcrumb({ category: 'sentry.event', message: 'Error: boom', event_id: 'a1b2' }), {
+		category: 'sentry.event',
+		message: 'Error: boom',
+	})
 })
 
 test('breadcrumbs of clicks and input are dropped with their selectors', () => {
@@ -369,33 +328,67 @@ test('breadcrumbs of clicks and input are dropped with their selectors', () => {
 	}
 })
 
-test('console breadcrumbs keep only warnings and errors', () => {
+test('console breadcrumbs keep only warnings and errors, and only their text', () => {
 	for (const level of ['log', 'info', 'debug']) {
 		assert.equal(cleanBreadcrumb({ category: 'console', level, message: 'noise' }), null, level)
 	}
 
 	for (const level of ['warning', 'error']) {
-		assert.equal(cleanBreadcrumb({ category: 'console', level, message: 'kept' }).message, 'kept', level)
+		assert.deepEqual(
+			cleanBreadcrumb({
+				category: 'console',
+				level,
+				message: 'retry with [object Object] token=abc',
+				data: { logger: 'console', arguments: ['retry with', { authToken: 'abc' }, 'token=abc'] },
+			}),
+			{ category: 'console', level, message: 'retry with [object Object] token [Filtered]' },
+			level,
+		)
 	}
 })
 
-test('long text is scrubbed in linear time', () => {
-	const size = 100_000
-	const started = performance.now()
-
-	for (const text of [
+test('long and adversarial input is cleaned in linear time', () => {
+	const size = 1_000_000
+	const inputs = [
 		'a'.repeat(size),
 		'token'.repeat(size / 5),
 		'eyJ'.repeat(size / 3),
 		'?a'.repeat(size / 2),
-		'a :'.repeat(size / 3),
-		'Ab1'.repeat(size / 3),
-		`cookie${' '.repeat(size)}`,
-		'token:"'.repeat(size / 7),
-	]) {
-		scrubText(text)
+		'#'.repeat(size),
+		'//'.repeat(size / 2),
+		'//a:'.repeat(size / 4),
+		'@/'.repeat(size / 2),
+		'a1'.repeat(size / 2),
+		'Ab1+'.repeat(size / 4),
+		'data:'.repeat(size / 5),
+		`blob:https://${'a'.repeat(size)}`,
+		`https://${'a:'.repeat(size / 2)}`,
+		`api${' '.repeat(size)}key`,
+	]
+	const started = performance.now()
+
+	for (const input of inputs) {
+		cleanText(input)
+		cleanUrl(input)
+		scrubEvent({
+			exception: {
+				values: [{ type: input, value: input, stacktrace: { frames: [{ filename: input, function: input }] } }],
+			},
+			breadcrumbs: [{ category: 'fetch', message: input, data: { method: input, url: input } }],
+			tags: { tag: input },
+		})
 	}
 
-	// Линейно это миллисекунды, квадратично -- минуты.
-	assert.ok(performance.now() - started < 1000)
+	// Те же формы в пределах обрезки, много раз: квадратичная регулярка тут заметна.
+	for (const input of inputs) {
+		const head = input.slice(0, 256)
+
+		for (let i = 0; i < 2000; i++) {
+			cleanText(head)
+			cleanUrl(head)
+		}
+	}
+
+	// Линейно это десятки миллисекунд, квадратично -- минуты.
+	assert.ok(performance.now() - started < 2000)
 })
