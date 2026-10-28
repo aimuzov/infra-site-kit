@@ -129,6 +129,28 @@ test('a word the cut runs through goes whole', () => {
 	assert.equal(cleanText('x'.repeat(300)), '…')
 })
 
+test('an address the cut parts from its @ goes to the end of the text', () => {
+	const pad = 'Upstream request failed, retrying later. '.repeat(5)
+
+	// Граница проходит по паролю или логину с пробелами, и `@` остаётся за ней.
+	for (const userinfo of [
+		'deploy:correct horse battery staple',
+		'deploy:pa/ss word more words',
+		'correct horse battery staple',
+	]) {
+		const clean = cleanText(`${pad}https://${userinfo}@db.example.com/x`)
+
+		assert.equal(clean, `${pad}https://…`, userinfo)
+	}
+
+	// Хост без пароля до границы остаётся.
+	const host = `${pad}see https://db.example.com/x and more`
+
+	const clean = cleanText(host.padEnd(300, ' x'))
+
+	assert.ok(clean.startsWith(host) && clean.endsWith(' x …'), clean)
+})
+
 test('addresses in text lose the user info, the query and the fragment', () => {
 	assertCleans([
 		['Failed at https://bob:hunter2@api.example.com/v1 now', 'Failed at https://api.example.com/v1 now'],
@@ -158,6 +180,9 @@ test('addresses in text lose the user info, the query and the fragment', () => {
 		],
 		// Пароль с пробелом рвёт адрес раньше `@`.
 		['GET https://deploy:correct horse Hunter2@api.example.com/v1 failed', 'GET https://api.example.com/v1 failed'],
+		// Логин без пароля, но с пробелами, браузер тоже принимает.
+		['GET https://correct horse battery staple@db.example.com/v1 failed', 'GET https://db.example.com/v1 failed'],
+		['see http://intranet/x, ask ann@example.com', 'see http://intranet/x, ask ann@example.com'],
 		[
 			'Failed at http://localhost:4411, ask ann@example.com',
 			'Failed at http://localhost:4411, ask ann@example.com',

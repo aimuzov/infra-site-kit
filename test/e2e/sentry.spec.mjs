@@ -302,6 +302,33 @@ test('the user info of an address stays out however the browser reads it', async
 	])
 })
 
+test('user info with spaces stays out, even when the 256 cut parts it from @', async ({ page }) => {
+	const bodies = await openStand(page, '/ui/sentry.html')
+	const pad = 'Upstream request failed, retrying later. '.repeat(5)
+
+	await page.evaluate((pad) => {
+		// Логин с пробелами браузер принимает и без пароля.
+		console.error('GET https://correct horse battery staple@db.example.com/v1 failed')
+		console.error(`${pad}https://deploy:correct horse battery staple@db.example.com/x`)
+		console.error(`${pad}https://deploy:pa/ss word more words@db.example.com/x`)
+		setTimeout(() => {
+			throw new Error(`${pad}https://deploy:correct horse battery staple@db.example.com/x`)
+		})
+	}, pad)
+
+	await expect.poll(() => events(bodies).length).toBe(1)
+	expectNoSecrets(bodies, ['correct horse', 'deploy', 'pa/ss', 'word more'])
+
+	const [error] = events(bodies)
+
+	expect(error.exception.values[0].value).toBe(`${pad}https://…`)
+	expect(error.breadcrumbs.filter(({ category }) => category === 'console').map(({ message }) => message)).toEqual([
+		'GET https://db.example.com/v1 failed',
+		`${pad}https://…`,
+		`${pad}https://…`,
+	])
+})
+
 test('a plain error arrives with its type, short text and frames', async ({ page }) => {
 	const bodies = await openStand(page, '/ui/sentry.html')
 

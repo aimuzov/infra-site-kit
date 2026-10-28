@@ -183,9 +183,9 @@ export function cleanUrl(url) {
 }
 
 /**
- * Первые 256 символов текста. Слово, которое рассекла граница, уходит целиком: без
- * конца у адреса нет `@`, по которому срезается пароль, а у длинного токена -- длины,
- * по которой его узнают.
+ * Первые 256 символов текста без многоточия. Слово, которое рассекла граница, уходит
+ * целиком: без конца у адреса нет `@`, по которому срезается пароль, а у длинного
+ * токена -- длины, по которой его узнают.
  *
  * @param text - Текст любой длины.
  */
@@ -196,18 +196,20 @@ function cut(text) {
 
 	if (/\S/.test(text[end])) while (end > 0 && /\S/.test(text[end - 1])) end--
 
-	return `${text.slice(0, end)}…`
+	return text.slice(0, end)
 }
 
 /**
  * Текст, где у адресов нет логина с паролем: всё от слэшей до хоста, найденного
- * так же, как в `cleanUrl`, только в пределах слова. Пароль с пробелом
- * (`https://deploy:correct horse@host`) рвёт адрес раньше `@`, и тогда логин
- * с паролем тянутся до первого `@` дальше в тексте.
+ * так же, как в `cleanUrl`, только в пределах слова. Логин или пароль с пробелом
+ * (`https://deploy:correct horse@host`, `https://correct horse@host`) рвёт адрес
+ * раньше `@`, и тогда они тянутся до первого `@` дальше в тексте. Если граница
+ * отрезала этот `@`, уходит всё до конца текста.
  *
  * @param text - Обрезанный текст.
+ * @param more - Граница отрезала конец текста.
  */
-function withoutUserinfo(text) {
+function withoutUserinfo(text, more) {
 	let clean = ''
 	let done = 0
 	// Хост, слово с последним `@` в нём и ближайший `@` за словом каждый просмотрен
@@ -238,7 +240,7 @@ function withoutUserinfo(text) {
 		if (!isHost(host.slice(at + 1))) {
 			if (wordAt >= from) {
 				start = wordAt + 1
-			} else if (host.includes(':') && !isHost(HOST_LIKE.exec(host)[0])) {
+			} else if (host && !isHost(HOST_LIKE.exec(host)[0])) {
 				// `HOST_LIKE`: запятая или скобка после `localhost:4411` хост не портят.
 				if (nextAt < wordEnd) {
 					const next = text.indexOf('@', wordEnd)
@@ -246,7 +248,15 @@ function withoutUserinfo(text) {
 					nextAt = next < 0 ? text.length : next
 				}
 
-				if (nextAt < text.length) start = nextAt + before(text.slice(nextAt), /\s/).lastIndexOf('@') + 1
+				// Без `:` это логин, а не пароль, и браузер считает его логином, только
+				// если до `@` нет пути: `http://intranet/x, ask ann@host` остаётся.
+				const userinfo = host.includes(':') || !HOST_END.test(text.slice(from, nextAt))
+
+				if (userinfo && nextAt < text.length) {
+					start = nextAt + before(text.slice(nextAt), /\s/).lastIndexOf('@') + 1
+				} else if (userinfo && more) {
+					start = text.length
+				}
 			}
 		}
 
@@ -270,7 +280,11 @@ function withoutUserinfo(text) {
 export function cleanText(text) {
 	if (typeof text !== 'string') return undefined
 
-	let clean = withoutUserinfo(cut(text).replace(ESCAPED_SLASH, '/')).replace(TEXT_QUERY, '')
+	const head = cut(text)
+	const more = head.length < text.length
+	let clean = withoutUserinfo(head.replace(ESCAPED_SLASH, '/'), more).replace(TEXT_QUERY, '')
+
+	if (more) clean += '…'
 
 	const word = TELLING_WORD.exec(clean)
 
