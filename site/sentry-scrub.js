@@ -35,7 +35,7 @@ const HOST = /^(?:localhost|[\p{L}\p{N}_-]+(?:\.[\p{L}\p{N}_-]+)+\.?|\[[\da-f:.]
 const HOST_LIKE = /^[\p{L}\p{N}_.:[\]-]*/u
 // Источник адреса внутри `blob:`.
 const ORIGIN = /^[a-z][\w+.-]*:\/\/[^/]+/i
-// У `data:` остаётся только тип, содержимое после него уходит.
+// У `data:` остаётся только тип, содержимое после него выбрасывается.
 const DATA_TYPE = /^data:([\w.+-]+\/[\w.+-]+)(?=[,;])/i
 
 // `\/` из JSON, как его пишет PHP: в тексте это просто `/`.
@@ -128,7 +128,7 @@ const before = (text, pattern) => {
  * @param rest - Адрес без схемы и слэшей.
  * @param special - У схемы `\` -- тоже слэш.
  */
-const authority = (rest, special = true) => before(rest, special ? HOST_END : OPAQUE_HOST_END)
+const authority = (rest, special) => before(rest, special ? HOST_END : OPAQUE_HOST_END)
 
 const isHost = (host) => host.length <= HOST_LIMIT && HOST.test(host)
 
@@ -325,7 +325,7 @@ const frameFile = (file) => (file === MASKED ? file : cleanUrl(file))
 /**
  * Фрейм стека: файл, функция и место в коде. Строк исходника и переменных нет.
  * Фрейм, файл которого не похож на скрипт, -- это строка текста ошибки, и он
- * уходит целиком: SDK ещё и подставляет его файл соседним фреймам без файла.
+ * выбрасывается целиком: SDK ещё и подставляет его файл соседним фреймам без файла.
  *
  * @param frame - Фрейм из стектрейса SDK.
  */
@@ -349,16 +349,49 @@ function cleanFrame(frame) {
 }
 
 /**
- * Исключение: тип, текст, как поймано, и стек. `data` механизма не уходит.
+ * Фреймы без строк текста ошибки. V8 кладёт в стек весь текст, и строку, которая
+ * кончается адресом со строкой (`Reset link https://host/<jwt>:1`), SDK разбирает
+ * как фрейм с этим адресом, похожим на скрипт. Такой фрейм узнаётся по тому, что
+ * его `файл:строка` стоит в тексте, и выбрасывается вместе со всеми фреймами
+ * с тем же файлом: его SDK подставляет фреймам без файла.
+ *
+ * @param frames - Фреймы из стектрейса SDK.
+ * @param texts - Тексты ошибки как есть, до чистки.
+ */
+function ownFrames(frames, texts) {
+	const fromText = new Set(
+		frames
+			.filter(
+				({ filename, lineno }) =>
+					typeof filename === 'string' &&
+					filename &&
+					texts.some((text) => text.includes(`${filename}:${lineno}`)),
+			)
+			.map(({ filename }) => filename),
+	)
+
+	return frames.filter(({ filename, abs_path }) => !fromText.has(filename) && !fromText.has(abs_path))
+}
+
+/**
+ * Исключение: тип, текст, как поймано, и стек. `data` механизма не отправляется.
  *
  * @param exception - Исключение из `event.exception.values`.
+ * @param texts - Текст исходной ошибки из подсказки: в стеке он такой, как есть.
  */
-const cleanException = ({ type, value, mechanism, stacktrace }) =>
+const cleanException = ({ type, value, mechanism, stacktrace }, texts) =>
 	defined({
 		type: typeof type === 'string' && ERROR_TYPE.test(type) && !hasToken(type) ? type : 'Error',
 		value: cleanText(value),
 		mechanism: mechanism && pick(mechanism, MECHANISM_KEYS),
-		stacktrace: stacktrace?.frames && { frames: stacktrace.frames.map(cleanFrame).filter(Boolean) },
+		stacktrace: stacktrace?.frames && {
+			frames: ownFrames(
+				stacktrace.frames,
+				[value, ...texts].filter((text) => typeof text === 'string'),
+			)
+				.map(cleanFrame)
+				.filter(Boolean),
+		},
 	})
 
 /**
@@ -435,13 +468,17 @@ export function cleanBreadcrumb(breadcrumb) {
 export function scrubEvent(event, hint) {
 	if (hint) delete hint.attachments
 
+	const texts = [hint?.originalException?.message]
+
 	return (
 		defined({
 			...pick(event, EVENT_KEYS),
 			transaction: cleanUrl(event.transaction),
 			message: cleanText(event.message),
 			logentry: event.logentry && defined({ message: cleanText(event.logentry.message) }),
-			exception: event.exception?.values && { values: event.exception.values.map(cleanException) },
+			exception: event.exception?.values && {
+				values: event.exception.values.map((exception) => cleanException(exception, texts)),
+			},
 			breadcrumbs: event.breadcrumbs?.map(cleanBreadcrumb).filter(Boolean),
 			request: event.request && cleanRequest(event.request),
 			contexts: event.contexts?.trace && { trace: pick(event.contexts.trace, TRACE_KEYS) },

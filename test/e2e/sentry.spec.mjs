@@ -230,6 +230,38 @@ test('the lines of a multi-line error text never become frames', async ({ page }
 	}
 })
 
+test('a line of the error text that ends in an address with a line never becomes a frame', async ({ page }) => {
+	const bodies = await openStand(page, '/ui/sentry.html')
+	const jwt = `${signed.split('.')[0]}.eyJzdWIiOiJib2IiLCJyZXNldCI6dHJ1ZX0.${signed.split('.')[1]}`
+
+	await page.evaluate(
+		({ jwt, key }) => {
+			// Стек виджета из iframe, пересланный через `postMessage` и вложенный сайтом
+			// в текст своей ошибки. Строки, которые кончаются адресом со строкой, SDK
+			// разбирает как фреймы, хоть браузер их так и не пишет.
+			const remote = [
+				'Error: reset failed',
+				`Reset link https://auth.example.com/password-reset/${jwt}:1`,
+				`GET https://api.example.com/v1/users/ann@example.com/token/${key}:443`,
+				`    at token.hunter2secret (https://auth.example.com/session/${key}:2:3)`,
+				'ann.smith@https://auth.example.com/users/ann.smith@example.com/profile:4:5',
+			].join('\n')
+
+			setTimeout(() => {
+				throw new Error(`Widget failed\n${remote}`)
+			})
+		},
+		{ jwt, key },
+	)
+
+	await expect.poll(() => events(bodies).length).toBe(1)
+	expectNoSecrets(bodies, [jwt.slice(-20), key, 'hunter2secret', 'ann.smith', 'ann@example.com', 'auth.example.com'])
+
+	for (const { filename } of events(bodies)[0].exception.values[0].stacktrace.frames) {
+		expect(filename).toMatch(/^http:\/\/localhost:\d+\/ui\/assets\/[\w-]+\.js$/)
+	}
+})
+
 test('the user info of an address stays out however the browser reads it', async ({ page }) => {
 	const bodies = await openStand(page, '/ui/sentry.html')
 	// Токен длиннее границы в 2048 символов, которая отрезает его от `@`.

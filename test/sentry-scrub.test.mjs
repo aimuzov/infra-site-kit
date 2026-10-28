@@ -555,6 +555,50 @@ test('a frame keeps only a file the browser writes into a stack', () => {
 	)
 })
 
+test('a line of the error text that ends in an address with a line is no frame', () => {
+	const jwt = 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.c2lnbmF0dXJl'
+	const hex = '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b'
+	// Как SDK разбирает стек V8 с таким текстом: строки текста оказались в конце, а фрейму
+	// `page.evaluate` без файла SDK подставил файл соседа.
+	const text = [
+		'Widget failed',
+		`Reset link https://auth.example.com/reset/${jwt}:1`,
+		`GET https://api.example.com/v1/users/ann@example.com/token/${hex}:443`,
+		'ann.smith@https://auth.example.com/users/ann.smith@example.com/profile:4:5',
+		`    at token.hunter2secret (https://auth.example.com/session/${hex}:2:3)`,
+	].join('\n')
+	const stack = [
+		{ filename: 'https://site.example/_astro/app.js', function: 'f', lineno: 10, colno: 5 },
+		{ filename: `https://auth.example.com/session/${hex}`, function: '?', lineno: 7, colno: 1 },
+		{ filename: `https://auth.example.com/session/${hex}`, function: 'token.hunter2secret', lineno: 2, colno: 3 },
+		{
+			filename: 'https://auth.example.com/users/ann.smith@example.com/profile',
+			function: 'ann.smith',
+			lineno: 4,
+			colno: 5,
+		},
+		{ filename: `https://api.example.com/v1/users/ann@example.com/token/${hex}`, function: 'GET ', lineno: 443 },
+		{ filename: `https://auth.example.com/reset/${jwt}`, function: 'Reset link ', lineno: 1 },
+	]
+	const kept = [{ filename: 'https://site.example/_astro/app.js', function: 'f', lineno: 10, colno: 5 }]
+	const frames = (value, hint) =>
+		scrubEvent({ exception: { values: [{ type: 'Error', value, stacktrace: { frames: stack } }] } }, hint).exception
+			.values[0].stacktrace.frames
+
+	assert.deepEqual(frames(text), kept)
+	// Текст исключения SDK мог урезать, а у исходной ошибки он целый.
+	assert.deepEqual(frames('Widget failed', { originalException: new Error(text) }), kept)
+	// Фрейм без файла не узнать по тексту: у него `:5` с любым номером строки.
+	assert.deepEqual(
+		scrubEvent({
+			exception: { values: [{ value: 'at line :5', stacktrace: { frames: [{ filename: '', lineno: 5 }] } }] },
+		}).exception.values[0].stacktrace.frames,
+		[{ filename: '', lineno: 5 }],
+	)
+	// Без такого текста фреймы остаются: адрес скрипта в тексте ошибки без строки их не трогает.
+	assert.equal(frames('Failed to load https://site.example/_astro/app.js').length, stack.length)
+})
+
 test('an event without optional fields stays small', () => {
 	assert.deepEqual(scrubEvent({ event_id: 'a1b2', message: 'plain' }), { event_id: 'a1b2', message: 'plain' })
 	assert.deepEqual(
@@ -721,6 +765,6 @@ test('long and adversarial input is cleaned in linear time', () => {
 		}
 	}
 
-	// 16 тысяч прогонов -- около 100 миллисекунд, порог с запасом на медленный CI.
+	// По 500 прогонов каждой формы -- около 100 миллисекунд, порог с запасом на медленный CI.
 	assert.ok(performance.now() - started < 1500)
 })
