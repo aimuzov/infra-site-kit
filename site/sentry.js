@@ -28,6 +28,21 @@ export function parseDsn(dsn) {
 /** Что нужно Sentry в CSP сверх собственных источников сайта: SDK грузится с самого сайта. */
 export const sentryCsp = (dsn) => ({ directives: [`connect-src ${parseDsn(dsn).origin}`] })
 
+const sitePackage = (root) => JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
+
+/**
+ * Имя сайта из package.json: им же назван проект в Sentry.
+ *
+ * @param root - Корень сайта, по умолчанию каталог, откуда запущена сборка.
+ */
+export function siteName(root = process.cwd()) {
+	const { name } = sitePackage(root)
+
+	if (!name) throw new TypeError(`package.json in ${root} needs a name for the Sentry project`)
+
+	return name
+}
+
 /**
  * Релиз `<name>@<version>` из package.json сайта, тот же, что потом
  * понадобится при загрузке source maps.
@@ -35,7 +50,7 @@ export const sentryCsp = (dsn) => ({ directives: [`connect-src ${parseDsn(dsn).o
  * @param root - Корень сайта, по умолчанию каталог, откуда запущена сборка.
  */
 export function siteRelease(root = process.cwd()) {
-	const { name, version } = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
+	const { name, version } = sitePackage(root)
 
 	if (!name || !version) {
 		throw new TypeError(`package.json in ${root} needs a name and a version for the Sentry release`)
