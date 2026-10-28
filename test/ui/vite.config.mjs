@@ -1,12 +1,23 @@
+import { join } from 'node:path'
+
 import { svelte } from '@sveltejs/vite-plugin-svelte'
 import { defineConfig } from 'vite'
 
-// Стенд компонентов `ui/` для e2e: в ките нет Astro-сайта, поэтому их собирает Vite
+// Стенд компонентов `ui/` и Sentry для e2e: в ките нет Astro-сайта, поэтому их собирает Vite
 // так же, как собрал бы сайт, а `test/e2e/server.mjs` раздаёт сборку по `/ui/`.
 export default defineConfig({
 	root: import.meta.dirname,
 	base: '/ui/',
 	plugins: [svelte()],
-	build: { outDir: 'dist', emptyOutDir: true },
+	build: {
+		outDir: 'dist',
+		emptyOutDir: true,
+		rolldownOptions: {
+			input: {
+				index: join(import.meta.dirname, 'index.html'),
+				sentry: join(import.meta.dirname, 'sentry.html'),
+			},
+		},
+	},
 	logLevel: 'warn',
 })
