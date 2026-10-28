@@ -663,7 +663,7 @@ test('long and adversarial input is cleaned in linear time', () => {
 		'a.get '.repeat(size / 6),
 		`a [as ${'b.'.repeat(size / 2)}`,
 	]
-	const started = performance.now()
+	let started = performance.now()
 
 	for (const input of inputs) {
 		cleanText(input)
@@ -683,18 +683,24 @@ test('long and adversarial input is cleaned in linear time', () => {
 		})
 	}
 
-	// Те же формы в пределах обрезки, много раз: квадратичная регулярка тут заметна.
+	// Строки по миллиону символов: линейно это миллисекунды, квадратично -- минуты.
+	assert.ok(performance.now() - started < 1000)
+
+	// Те же формы в пределах обрезки, много раз. Квадрат на 256 символах стоит
+	// десятки микросекунд и не опасен, а вот перебор с откатами вырастает до секунд.
+	started = performance.now()
+
 	for (const input of inputs) {
 		const head = input.slice(0, 256)
 		const name = input.slice(0, 200)
 
-		for (let i = 0; i < 2000; i++) {
+		for (let i = 0; i < 500; i++) {
 			cleanText(head)
 			cleanUrl(head)
 			scrubEvent({ exception: { values: [{ type: name, stacktrace: { frames: [{ function: name }] } }] } })
 		}
 	}
 
-	// Линейно это десятки миллисекунд, квадратично -- минуты.
-	assert.ok(performance.now() - started < 2000)
+	// 16 тысяч прогонов -- около 100 миллисекунд, порог с запасом на медленный CI.
+	assert.ok(performance.now() - started < 1500)
 })
