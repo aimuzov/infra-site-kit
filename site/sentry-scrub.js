@@ -8,22 +8,38 @@ const FILTERED = '[Filtered]'
 // Строка обрезается раньше любой регулярки, и каждая проходит её за линейное время.
 const URL_LIMIT = 2048
 const TEXT_LIMIT = 256
+// Имя хоста не длиннее 253 символов, с портом и скобками IPv6 чуть больше.
+const HOST_LIMIT = 260
 
 // Консоль сайта перед ошибкой полезна предупреждениями и ошибками, а `log` и `debug`
 // пишут что угодно, в том числе чужие скрипты вроде Метрики.
 const CONSOLE_LEVELS = new Set(['warning', 'error'])
 
-// Схема и `//` в начале адреса.
-const URL_START = /^(?:[a-z][\w+.-]*:)?\/\//i
-// Хост с портом, каким его пропускает браузер: имя, IPv4 или IPv6 в скобках.
-const HOST = /^(?:[\p{L}\p{N}_.%-]*|\[[\w.:%]*\])(?::\d*)?$/u
+// Адрес читается так же, как его читает браузер: управляющие символы и пробелы
+// в начале он отбрасывает, а табы и переводы строк выкидывает отовсюду.
+const LEADING = /^[\0- ]+/
+const BREAKS = /[\t\n\r]/g
+const SCHEME = /^[a-z][\w+.-]*:/i
+// У этих схем `\` -- тоже слэш, и слэшей после схемы сколько угодно, хоть ни одного:
+// `https:\\bob:pw@host`, `https:bob:pw@host` и `https:///bob:pw@host` -- адреса с паролем.
+const SPECIAL = /^(?:https?|wss?|ftp|file):$/i
+const SLASHES = /^[/\\]*/
+const HOST_END = /[/\\?#]/
+// Хост, каким он бывает у сайта: имя с точкой, `localhost`, IPv4 или IPv6 в скобках,
+// и порт до пяти цифр. Логин с паролем, оборванный `/`, `?` или `#` в пароле
+// (`deploy:2024`, `ci`), так не выглядит.
+const HOST = /^(?:localhost|[\p{L}\p{N}_-]+(?:\.[\p{L}\p{N}_-]+)+\.?|\[[\da-f:.]+\])(?::\d{1,5})?$/iu
+const HOST_LIKE = /^[\p{L}\p{N}_.:[\]-]*/u
 // Источник адреса внутри `blob:`.
-const ORIGIN = /^[a-z][\w+.-]*:\/\/[^/\\?#]*/i
+const ORIGIN = /^[a-z][\w+.-]*:\/\/[^/]+/i
 // У `data:` остаётся только тип, содержимое после него уходит.
 const DATA_TYPE = /^data:([\w.+-]+\/[\w.+-]+)(?=[,;])/i
 
-// Адрес внутри текста: от `//` до пробела.
-const TEXT_ADDRESS = /\/\/\S*/g
+// `\/` из JSON, как его пишет PHP: в тексте это просто `/`.
+const ESCAPED_SLASH = /(?<!\\)\\+\//g
+// Начало адреса в тексте: `//` или `\\`, со схемой или без, а у схем, где браузер
+// прощает слэши, -- схема и сколько угодно слэшей.
+const TEXT_ADDRESS = /(?:(?<![\w+.-])[a-z][\w+.-]*:)?[/\\]{2}[/\\]*|(?<![\w+.-])(?:https?|wss?|ftp|file):[/\\]*/gi
 // Query и фрагмент. У адреса `?` или `#` уходит со всем значением: `'` браузер не
 // кодирует, и она его не обрывает, а `"` и `` ` `` кодирует. Сам по себе, как
 // `location.hash` в тексте, -- только с `=` или `/`: `issue #42` и `Done?` остаются.
@@ -33,9 +49,16 @@ const TEXT_QUERY = /(?<=\S)[?#](?=\S)[^\s"`]*|(?<!\S)[?#](?=[^\s"`=/]*[=/])[^\s"
 const TELLING_WORD =
 	/(?:passw|passphrase|passcode|pwd|secret|token|auth(?!or(?!i[sz]))|bearer|cookie|session|sessid|csrf|xsrf|jwt|api[\s_-]?key|private[\s_-]?key|credential|signature|otp)[a-z]*/i
 const JWT = /\beyJ[\w-]{7,}(?:\.[\w-]*)*/g
-// Случайная строка в base64, base64url и hex: длинный прогон с цифрой и буквой.
-const TOKEN_RUN = /[\w+/=-]{32,}/g
+// Случайная строка в base64, base64url и hex, в том числе с `%2F` из адреса: длинный
+// прогон с цифрой и буквой.
+const TOKEN_RUN = /[\w+/=%-]{32,}/g
 
+// Файл, который браузер пишет в стек: адрес http(s), расширения или `blob:` без
+// пробелов и кавычек, а у встроенных функций `<anonymous>` или `native`. Строки текста
+// ошибки V8 тоже кладёт в стек, и SDK разбирает их как фреймы, а такие не похожи.
+const FRAME_ADDRESS =
+	/^(?:(?:blob:)?https?:\/\/[^/\s"'`<>\\]+|[a-z-]+-extension:\/\/[^/\s"'`<>\\]*)(?:\/[\w.~!$&()*+,;=:@%[\]/-]*)?$|^blob:$/i
+const BUILTIN_FILE = /^(?:<anonymous>|native|\[native code\])$/
 // Тип ошибки -- имя класса: `TypeError`, `DOMException`, `TokenExpiredError`.
 const ERROR_TYPE = /^[A-Za-z_$][\w$.]{0,59}$/
 // Имя функции во фрейме, как его пишут V8, Firefox и Safari: `new Foo`, `async*load`,
@@ -77,41 +100,68 @@ function defined(object) {
 
 const pick = (object, keys) => defined(Object.fromEntries(keys.map((key) => [key, object[key]])))
 
+const integer = (value) => (Number.isInteger(value) ? value : undefined)
+
 const random = (run) => /\d/.test(run) && /[a-z]/i.test(run)
 
 // JWT или длинная случайная строка, которые в тексте стали бы `[Filtered]`.
 const hasToken = (text) => text.search(JWT) >= 0 || (text.match(TOKEN_RUN) ?? []).some(random)
 
-/**
- * Хост адреса с логином, паролем и портом: всё после `//` до пути, query или фрагмента.
- *
- * @param rest - Адрес без схемы и `//`.
- */
-function authority(rest) {
-	const end = rest.search(/[/\\?#]/)
+// Всё до первого совпадения или вся строка, если его нет.
+const before = (text, pattern) => {
+	const end = text.search(pattern)
 
-	return end < 0 ? rest : rest.slice(0, end)
+	return end < 0 ? text : text.slice(0, end)
 }
 
 /**
- * Адрес без логина и пароля. Сначала уходит всё до последнего `@` хоста, как у
- * браузера. Если и после этого хост не похож на хост (`deploy:AbC`), его оборвал
- * `/`, `?` или `#` в пароле раньше `@`, и уходит всё до последнего `@` вообще.
+ * Хост адреса с логином, паролем и портом: всё до пути, query или фрагмента.
  *
- * @param address - Адрес или кусок текста от `//` до пробела.
+ * @param rest - Адрес без схемы и слэшей.
  */
-function withoutUserinfo(address) {
-	const start = URL_START.exec(address)?.[0]
+const authority = (rest) => before(rest, HOST_END)
 
-	if (!start) return address
+const isHost = (host) => host.length <= HOST_LIMIT && HOST.test(host)
 
-	let rest = address.slice(start.length)
+/**
+ * Где в адресе начинается хост. Сначала -- после последнего `@` до пути, как у
+ * браузера. Если и тогда хост не похож на хост (`deploy:20241028`), его оборвал
+ * `/`, `?` или `#` в пароле раньше `@`, и хост начинается после последнего `@` вообще.
+ *
+ * @param rest - Адрес без схемы и слэшей.
+ */
+function hostStart(rest) {
+	const start = authority(rest).lastIndexOf('@') + 1
 
-	rest = rest.slice(authority(rest).lastIndexOf('@') + 1)
+	return isHost(authority(rest.slice(start))) ? start : rest.lastIndexOf('@') + 1
+}
 
-	if (!HOST.test(authority(rest))) rest = rest.slice(rest.lastIndexOf('@') + 1)
+/**
+ * Адрес без логина с паролем, query и фрагмента. Если хост так и не похож на хост,
+ * например граница в 2048 символов отрезала его от `@`, остаётся одна схема.
+ *
+ * @param head - Адрес, обрезанный и выровненный, как у браузера.
+ */
+function address(head) {
+	const scheme = SCHEME.exec(head)?.[0] ?? ''
+	let rest = head.slice(scheme.length)
+	let slashes = SLASHES.exec(rest)[0]
 
-	return start + rest
+	if (scheme && !SPECIAL.test(scheme)) {
+		// У других схем хост бывает только после `//`: от `about:` и `mailto:` остаётся схема.
+		if (!rest.startsWith('//')) return scheme.toLowerCase()
+
+		slashes = '//'
+	} else if (!scheme && slashes.length < 2) {
+		return before(head, /[?#]/)
+	}
+
+	rest = rest.slice(slashes.length).replaceAll('\\', '/')
+	rest = rest.slice(hostStart(rest))
+
+	const prefix = `${scheme.toLowerCase()}//`
+
+	return isHost(authority(rest)) ? prefix + before(rest, /[?#]/) : prefix
 }
 
 /**
@@ -123,17 +173,13 @@ function withoutUserinfo(address) {
 export function cleanUrl(url) {
 	if (typeof url !== 'string') return undefined
 
-	// Пробелы в начале браузер отбрасывает, и адрес с ними уходит в запрос как обычный.
-	const head = url.slice(0, URL_LIMIT).trimStart()
+	const head = url.slice(0, URL_LIMIT).replace(LEADING, '').replace(BREAKS, '')
 
 	if (/^data:/i.test(head)) return `data:${DATA_TYPE.exec(head)?.[1] ?? ''}`
 
-	if (/^blob:/i.test(head)) return `blob:${ORIGIN.exec(withoutUserinfo(head.slice(5)))?.[0] ?? ''}`
+	if (/^blob:/i.test(head)) return `blob:${ORIGIN.exec(address(head.slice(5)))?.[0] ?? ''}`
 
-	const address = withoutUserinfo(head)
-	const end = address.search(/[?#]/)
-
-	return end < 0 ? address : address.slice(0, end)
+	return address(head)
 }
 
 /**
@@ -154,6 +200,66 @@ function cut(text) {
 }
 
 /**
+ * Текст, где у адресов нет логина с паролем: всё от слэшей до хоста, найденного
+ * так же, как в `cleanUrl`, только в пределах слова. Пароль с пробелом
+ * (`https://deploy:correct horse@host`) рвёт адрес раньше `@`, и тогда логин
+ * с паролем тянутся до первого `@` дальше в тексте.
+ *
+ * @param text - Обрезанный текст.
+ */
+function withoutUserinfo(text) {
+	let clean = ''
+	let done = 0
+	// Хост, слово с последним `@` в нём и ближайший `@` за словом каждый просмотрен
+	// по разу: адрес за адресом в одном слове не должны стоить квадрат.
+	let seen = 0
+	let wordEnd = -1
+	let wordAt = -1
+	let nextAt = -1
+
+	for (const match of text.matchAll(TEXT_ADDRESS)) {
+		if (match.index < Math.max(done, seen)) continue
+
+		const from = match.index + match[0].length
+
+		if (from > wordEnd) {
+			const word = before(text.slice(from), /\s/)
+
+			wordEnd = from + word.length
+			wordAt = from + word.lastIndexOf('@')
+		}
+
+		const host = authority(text.slice(from, wordEnd))
+		const at = host.lastIndexOf('@')
+		let start = from + at + 1
+
+		seen = from + host.length
+
+		if (!isHost(host.slice(at + 1))) {
+			if (wordAt >= from) {
+				start = wordAt + 1
+			} else if (host.includes(':') && !isHost(HOST_LIKE.exec(host)[0])) {
+				// `HOST_LIKE`: запятая или скобка после `localhost:4411` хост не портят.
+				if (nextAt < wordEnd) {
+					const next = text.indexOf('@', wordEnd)
+
+					nextAt = next < 0 ? text.length : next
+				}
+
+				if (nextAt < text.length) start = nextAt + before(text.slice(nextAt), /\s/).lastIndexOf('@') + 1
+			}
+		}
+
+		if (start > from) {
+			clean += text.slice(done, from)
+			done = start
+		}
+	}
+
+	return clean + text.slice(done)
+}
+
+/**
  * Текст, обрезанный до 256 символов. В нём у адресов нет логина с паролем, query
  * и фрагмента, после первого говорящего слова всё до конца текста заменено, а JWT
  * и длинные случайные строки спрятаны. До конца текста, а не строки: иначе прошли
@@ -164,7 +270,7 @@ function cut(text) {
 export function cleanText(text) {
 	if (typeof text !== 'string') return undefined
 
-	let clean = cut(text).replace(TEXT_ADDRESS, withoutUserinfo).replace(TEXT_QUERY, '')
+	let clean = withoutUserinfo(cut(text).replace(ESCAPED_SLASH, '/')).replace(TEXT_QUERY, '')
 
 	const word = TELLING_WORD.exec(clean)
 
@@ -181,22 +287,34 @@ export function cleanText(text) {
 const cleanName = (name) =>
 	typeof name === 'string' && name.length <= NAME_LIMIT && NAME.test(name) && !hasToken(name) ? name : undefined
 
+// Адрес скрипта в стеке всегда со строкой, а встроенная функция бывает и без неё.
+const isFrameFile = (file, lineno) => BUILTIN_FILE.test(file) || (lineno !== undefined && FRAME_ADDRESS.test(file))
+
 /**
  * Фрейм стека: файл, функция и место в коде. Строк исходника и переменных нет.
+ * Фрейм, файл которого не похож на скрипт, -- это строка текста ошибки, и он
+ * уходит целиком: SDK ещё и подставляет его файл соседним фреймам без файла.
  *
  * @param frame - Фрейм из стектрейса SDK.
  */
-const cleanFrame = (frame) =>
-	defined({
-		filename: cleanUrl(frame.filename),
-		abs_path: cleanUrl(frame.abs_path),
+function cleanFrame(frame) {
+	const filename = cleanUrl(frame.filename)
+	const abs_path = cleanUrl(frame.abs_path)
+	const lineno = integer(frame.lineno)
+
+	if ([filename, abs_path].some((file) => file && !isFrameFile(file, lineno))) return undefined
+
+	return defined({
+		filename,
+		abs_path,
 		function: cleanName(frame.function),
 		module: cleanName(frame.module),
-		lineno: frame.lineno,
-		colno: frame.colno,
+		lineno,
+		colno: integer(frame.colno),
 		in_app: frame.in_app,
 		platform: frame.platform,
 	})
+}
 
 /**
  * Исключение: тип, текст, как поймано, и стек. `data` механизма не уходит.

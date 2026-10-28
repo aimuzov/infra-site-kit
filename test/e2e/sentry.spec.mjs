@@ -186,6 +186,122 @@ test('a thrown object, JSON in the error text and the user info of an address st
 	])
 })
 
+test('the lines of a multi-line error text never become frames', async ({ page }) => {
+	const bodies = await openStand(page, '/ui/sentry.html')
+
+	await page.evaluate(() => {
+		// Ответ апстрима со стеком Node и JSON с новой строки. V8 кладёт в стек весь текст
+		// ошибки, и SDK разбирает его строки как фреймы.
+		const upstream = [
+			"TypeError: Cannot read properties of undefined (reading 'id')",
+			'    at login (/home/deploy/billing-api/routes/auth.js:42:13)',
+			'    at Layer.handle (file:///Users/alice/billing-api/node_modules/express/lib/router/layer.js:95:5)',
+			'session@/password = hunter2 Kx9bT2mQ:1:1',
+			JSON.stringify({ redirect: 'https://site.example/cb', refresh_token: 'rt-hunter2-secret' }),
+			'  at password=correct horse battery staple, apiKey=AbCdEf',
+		].join('\n')
+
+		setTimeout(() => {
+			throw new Error(`Sign-in failed, session expired\n${upstream}`)
+		})
+	})
+
+	await expect.poll(() => events(bodies).length).toBe(1)
+	expectNoSecrets(bodies, [
+		'deploy',
+		'alice',
+		'billing-api',
+		'login',
+		'hunter2',
+		'Kx9bT2mQ',
+		'correct horse',
+		'AbCdEf',
+	])
+
+	const [exception] = events(bodies)[0].exception.values
+
+	expect(exception.value).toBe('Sign-in failed, session [Filtered]')
+	// Остался фрейм обёртки `setTimeout` из чанка SDK, а фреймы из `page.evaluate` без
+	// файла ушли вместе со строками текста, чей файл им подставил SDK.
+	expect(exception.stacktrace.frames.length).toBeGreaterThan(0)
+
+	for (const { filename } of exception.stacktrace.frames) {
+		expect(filename).toMatch(/^http:\/\/localhost:\d+\/ui\/assets\/[\w-]+\.js$/)
+	}
+})
+
+test('the user info of an address stays out however the browser reads it', async ({ page }) => {
+	const bodies = await openStand(page, '/ui/sentry.html')
+	// Токен длиннее границы в 2048 символов, которая отрезает его от `@`.
+	const jwt = `eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJkZXBsb3kiLCJ${'x'.repeat(2100)}.c2ln`
+
+	// Адреса с паролем после `/` браузер отправляет на хост, который видит до него.
+	await page.route(/^https?:\/\/(?:api\.example\.com|deploy|ci)\//, (route) =>
+		route.fulfill({ status: 500, body: '' }),
+	)
+	await page.evaluate(async (jwt) => {
+		const send = (url) =>
+			new Promise((resolve) => {
+				const xhr = new XMLHttpRequest()
+
+				xhr.onloadend = resolve
+
+				try {
+					xhr.open('GET', url)
+					xhr.send()
+				} catch {
+					// Адрес, который браузер не разобрал: крошку SDK пишет и для него.
+					resolve()
+				}
+			})
+
+		for (const url of [
+			'https:\\\\bob:Hunter2a@api.example.com/v1/me',
+			'https:bob:Hunter2b@api.example.com/v1/me',
+			'https:///bob:Hunter2c@api.example.com/v1/me',
+			'https:/\t/bob:Hunter2d@api.example.com/v1/me',
+			'\u0001https://bob:Hunter2e@api.example.com/v1/me',
+			'\\\\bob:Hunter2f@api.example.com/v1/me',
+			'https://deploy:20241028/Hunter2g@api.example.com/v1/me',
+			'https://deploy:/Hunter2h@api.example.com/v1/me',
+			'https://ci/bot:Hunter2i@api.example.com/v1/me',
+			`https://x-access-token:${jwt}@api.example.com/v1/me`,
+		]) {
+			await send(url)
+		}
+
+		// PHP пишет `/` в JSON как `\/`.
+		console.error('Upstream 502: {"error":"cannot reach https:\\/\\/deploy:Hunter2j@db.example.com\\/v1"}')
+		console.error('Upstream 502: {"value":"wJalrXUtnFEMI\\/K7MDENG\\/bPxRfiCYEXAMPLEKEY"}')
+		console.error('GET https://deploy:correct horse Hunter2k@api.example.com/v1 failed')
+		setTimeout(() => {
+			throw new Error('after requests')
+		})
+	}, jwt)
+
+	await expect.poll(() => events(bodies).length).toBe(1)
+	expectNoSecrets(bodies, [
+		...'abcdefghijk'.split('').map((letter) => `Hunter2${letter}`),
+		'bob',
+		'20241028',
+		'correct horse',
+		'eyJhbGciOiJSUzI1NiJ9',
+		'wJalrXUtnFEMI',
+	])
+
+	const [error] = events(bodies)
+
+	for (const { data } of error.breadcrumbs.filter(({ category }) => category === 'xhr')) {
+		expect(data.url).toMatch(/^(?:https:)?\/\/(?:api\.example\.com\/v1\/me)?$/)
+	}
+
+	expect(error.breadcrumbs.filter(({ category }) => category === 'console').map(({ message }) => message)).toEqual([
+		'Upstream 502: {"error":"cannot reach https://db.example.com/v1"}',
+		'Upstream 502: {"value":"[Filtered]"}',
+		'GET https://api.example.com/v1 failed',
+	])
+})
+
 test('a plain error arrives with its type, short text and frames', async ({ page }) => {
 	const bodies = await openStand(page, '/ui/sentry.html')
 

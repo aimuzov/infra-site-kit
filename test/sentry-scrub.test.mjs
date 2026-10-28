@@ -56,6 +56,47 @@ test('an address loses the query, the fragment and the user info', () => {
 	assert.equal(cleanUrl(undefined), undefined)
 })
 
+test('an address loses the user info however the browser reads it', () => {
+	for (const [url, clean] of [
+		// `\` браузер читает как `/`, а слэшей после `https:` бывает сколько угодно, хоть ни одного.
+		['https:\\\\bob:Hunter2a@api.example.com/v1/me', 'https://api.example.com/v1/me'],
+		['https:bob:Hunter2b@api.example.com/v1/me', 'https://api.example.com/v1/me'],
+		['https:/bob:Hunter2c@api.example.com/v1/me', 'https://api.example.com/v1/me'],
+		['https:///bob:Hunter2c@api.example.com/v1/me', 'https://api.example.com/v1/me'],
+		['\\\\bob:Hunter2g@api.example.com/v1/me', '//api.example.com/v1/me'],
+		['/\\bob:Hunter2g@api.example.com/v1/me', '//api.example.com/v1/me'],
+		// Табы и переводы строк внутри браузер выкидывает, управляющие символы в начале -- тоже.
+		['https:/\t/bob:Hunter2d@api.example.com/v1/me', 'https://api.example.com/v1/me'],
+		['https://bo\nb:Hunter2d@api.example.com/v1/me', 'https://api.example.com/v1/me'],
+		['\u0001https://bob:Hunter2e@api.example.com/v1/me', 'https://api.example.com/v1/me'],
+		// До `/`, `?` или `#` в пароле логин похож на хост с портом, а хост -- на путь.
+		['https://deploy:20241028/AbC@api.example.com/v1/items', 'https://api.example.com/v1/items'],
+		['https://deploy:4821#x@api.example.com/v1/items', 'https://api.example.com/v1/items'],
+		['https://deploy:/hunter2@api.example.com/v1', 'https://api.example.com/v1'],
+		['https://deploy:2024/Spring@api.example.com/v1', 'https://api.example.com/v1'],
+		['https://ci/bot:hunter2@api.example.com/v1', 'https://api.example.com/v1'],
+		// Хост как у сайта остаётся, и `@` в пути после него -- тоже.
+		['http://localhost:4411/ui/sentry.html?x=1', 'http://localhost:4411/ui/sentry.html'],
+		['http://127.0.0.1:4321/@ann', 'http://127.0.0.1:4321/@ann'],
+		['HTTPS://Site.Example/a', 'https://Site.Example/a'],
+		// Хост ни на что не похож: остаётся только схема.
+		['https://intranet/a', 'https://'],
+		['file:///home/deploy/billing-api/routes/auth.mjs', 'file://'],
+		['chrome-extension://abcdefghijklmnopabcdefghijklmnop/content.js', 'chrome-extension://'],
+		['mailto:ann@example.com', 'mailto:'],
+		['about:blank', 'about:'],
+	]) {
+		assert.equal(cleanUrl(url), clean, JSON.stringify(url))
+	}
+
+	// Граница в 2048 символов отрезала длинный токен от `@`.
+	const jwt = `eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJkZXBsb3kiLCJ${'x'.repeat(2100)}.c2ln`
+
+	assert.equal(cleanUrl(`https://x-access-token:${jwt}@api.example.com/v1/items`), 'https://')
+	assert.equal(cleanUrl(`https://deploy:AbC/${'d'.repeat(2100)}@api.example.com/v1`), 'https://')
+	assert.equal(cleanUrl(`https://deploy:${'4'.repeat(2100)}@api.example.com/v1`), 'https://')
+})
+
 test('text is cut to 256 characters before anything else', () => {
 	const clean = cleanText(`Failed ${'a '.repeat(200)}`)
 
@@ -105,6 +146,23 @@ test('addresses in text lose the user info, the query and the fragment', () => {
 			'Failed to parse URL from https://api.example.com/v1/items',
 		],
 		['Failed (https://bob:pa#ss@api.example.com/v1) then', 'Failed (https://api.example.com/v1) then'],
+		['GET https://deploy:20241028/AbC@api.example.com/v1 failed', 'GET https://api.example.com/v1 failed'],
+		['GET https://ci/bot:hunter2@api.example.com/v1 failed', 'GET https://api.example.com/v1 failed'],
+		['GET https:\\\\bob:Hunter2@api.example.com/v1 failed', 'GET https:\\\\api.example.com/v1 failed'],
+		['GET https:///bob:Hunter2@api.example.com/v1 failed', 'GET https:///api.example.com/v1 failed'],
+		['GET https:bob:Hunter2@api.example.com/v1 failed', 'GET https:api.example.com/v1 failed'],
+		// PHP по умолчанию пишет `/` в JSON как `\/`.
+		[
+			String.raw`Upstream 502: {"error":"cannot reach https:\/\/deploy:Hunter2pw@db.example.com\/v1"}`,
+			'Upstream 502: {"error":"cannot reach https://db.example.com/v1"}',
+		],
+		// Пароль с пробелом рвёт адрес раньше `@`.
+		['GET https://deploy:correct horse Hunter2@api.example.com/v1 failed', 'GET https://api.example.com/v1 failed'],
+		[
+			'Failed at http://localhost:4411, ask ann@example.com',
+			'Failed at http://localhost:4411, ask ann@example.com',
+		],
+		['Missing C:\\\\Users\\\\ann\\\\notes.txt', 'Missing C:\\\\Users\\\\ann\\\\notes.txt'],
 		// `location.search` и `location.hash`, вставленные в текст сами по себе.
 		['Bad sign-in request: #code=482173&state=Xk29fQ', 'Bad sign-in request: '],
 		['?code=482173&state=Xk29fQ', ''],
@@ -165,6 +223,12 @@ test('JWTs and long random strings go', () => {
 		['reset /reset/8f14e45fceea167a5a36dedd4bea2543 expired', 'reset [Filtered] expired'],
 		['key wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY1 ok', 'key [Filtered] ok'],
 		['id a1B2c3D4e5F6g7H8i9J0kLmNa1B2c3D4e5F6 here', 'id [Filtered] here'],
+		// `\/` из JSON и `%2F` из адреса прогон не рвут.
+		[
+			String.raw`Upstream 502: {"value":"wJalrXUtnFEMI\/K7MDENG\/bPxRfiCYEXAMPLEKEY"}`,
+			'Upstream 502: {"value":"[Filtered]"}',
+		],
+		['GET /v1/keys/wJalrXUtnFEMI%2FK7MDENG%2FbPxRfiCYEXAMPLEKEY failed', 'GET [Filtered] failed'],
 	])
 
 	// Без цифры или без буквы прогон -- не случайная строка, и короче 32 он тоже остаётся.
@@ -404,6 +468,50 @@ test('frames keep the function names V8, Firefox and Safari write', () => {
 	)
 })
 
+test('a frame keeps only a file the browser writes into a stack', () => {
+	const frames = (list) =>
+		scrubEvent({ exception: { values: [{ stacktrace: { frames: list } }] } }).exception.values[0].stacktrace.frames
+
+	assert.deepEqual(
+		frames([
+			{ filename: 'https://site.example/_astro/page.BkS2x9aF.js?v=1', function: 'load', lineno: 1, colno: 2 },
+			{ filename: '<anonymous>', function: 'new Foo' },
+			{ filename: 'native', function: 'Array.map' },
+			{ filename: '[native code]', function: 'forEach' },
+			{ filename: 'chrome-extension://abcdefghijklmnopabcdefghijklmnop/content.js', lineno: 3 },
+			{ filename: 'blob:https://site.example/550e8400-e29b-41d4', lineno: 4 },
+			// Так фрейм из `page.evaluate` или `eval` приходит без файла.
+			{ filename: '', function: 'eval', lineno: 5 },
+		]),
+		[
+			{ filename: 'https://site.example/_astro/page.BkS2x9aF.js', function: 'load', lineno: 1, colno: 2 },
+			{ filename: '<anonymous>', function: 'new Foo' },
+			{ filename: 'native', function: 'Array.map' },
+			{ filename: '[native code]', function: 'forEach' },
+			{ filename: 'chrome-extension://', lineno: 3 },
+			{ filename: 'blob:https://site.example', lineno: 4 },
+			{ filename: '', function: 'eval', lineno: 5 },
+		],
+	)
+
+	// Строки многострочного текста ошибки, которые SDK разобрал как фреймы, вместе
+	// с соседями, которым он подставил их файл.
+	assert.deepEqual(
+		frames([
+			{ filename: 'password=correct horse battery staple, apiKey=AbCdEf' },
+			{ filename: '/home/deploy/billing-api/routes/auth.js', function: 'login', lineno: 42, colno: 13 },
+			{ filename: 'file:///Users/alice/billing-api/routes/auth.mjs', function: 'login', lineno: 42, colno: 13 },
+			{ filename: '/password = hunter2 Kx9bT2mQ', function: 'session', lineno: 1, colno: 1 },
+			{ filename: '/api/login password=hunter2', function: 'eval', lineno: 370, colno: 30 },
+			{ filename: 'https://site.example/cb","refresh_token":"rt-hunter2-secret"}', lineno: 1 },
+			{ filename: 'https://site.example/reset/8f14e45fceea167a5a36dedd4bea2543' },
+			{ filename: 'https://site.example/a.js', abs_path: '/home/deploy/a.js', lineno: 1 },
+			{ filename: 'index 0', function: 'async Promise.all' },
+		]),
+		[],
+	)
+})
+
 test('an event without optional fields stays small', () => {
 	assert.deepEqual(scrubEvent({ event_id: 'a1b2', message: 'plain' }), { event_id: 'a1b2', message: 'plain' })
 	assert.deepEqual(
@@ -512,6 +620,19 @@ test('long and adversarial input is cleaned in linear time', () => {
 		'//a:b/'.repeat(size / 6),
 		' #a/'.repeat(size / 4),
 		`api${' '.repeat(size)}key`,
+		// Схемы, слэши, хосты и пароли с пробелом.
+		'\\'.repeat(size),
+		'\\/'.repeat(size / 2),
+		'a:'.repeat(size / 2),
+		'a.a:'.repeat(size / 4),
+		'https:'.repeat(size / 6),
+		'//a:b '.repeat(size / 6),
+		`//a:b ${'c '.repeat(size / 2)}@`,
+		`https://${'a.'.repeat(size / 2)}`,
+		`https://[${':'.repeat(size)}`,
+		`\u0001${'\t'.repeat(size)}`,
+		`https://a/${'a'.repeat(size)}"`,
+		`blob:${'blob:'.repeat(size / 5)}`,
 		// Имена функций: точки, `get` и `[as` между частями.
 		'a.'.repeat(size / 2),
 		'a.get '.repeat(size / 6),
@@ -524,7 +645,13 @@ test('long and adversarial input is cleaned in linear time', () => {
 		cleanUrl(input)
 		scrubEvent({
 			exception: {
-				values: [{ type: input, value: input, stacktrace: { frames: [{ filename: input, function: input }] } }],
+				values: [
+					{
+						type: input,
+						value: input,
+						stacktrace: { frames: [{ filename: input, function: input, lineno: 1 }] },
+					},
+				],
 			},
 			breadcrumbs: [{ category: 'fetch', message: input, data: { method: input, url: input } }],
 			tags: { tag: input },
