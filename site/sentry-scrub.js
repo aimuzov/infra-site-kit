@@ -13,30 +13,36 @@ const TEXT_LIMIT = 256
 // пишут что угодно, в том числе чужие скрипты вроде Метрики.
 const CONSOLE_LEVELS = new Set(['warning', 'error'])
 
-// Начало адреса до хоста: логин и пароль в нём срезаются.
-const URL_START = /^([a-z][\w+.-]*:)?\/\/(?:[^/\\?#]*@)?/i
+// Схема и `//` в начале адреса.
+const URL_START = /^(?:[a-z][\w+.-]*:)?\/\//i
+// Хост с портом, каким его пропускает браузер: имя, IPv4 или IPv6 в скобках.
+const HOST = /^(?:[\p{L}\p{N}_.%-]*|\[[\w.:%]*\])(?::\d*)?$/u
 // Источник адреса внутри `blob:`.
-const ORIGIN = /^([a-z][\w+.-]*:\/\/)(?:[^/\\?#]*@)?([^/\\?#]*)/i
+const ORIGIN = /^[a-z][\w+.-]*:\/\/[^/\\?#]*/i
 // У `data:` остаётся только тип, содержимое после него уходит.
 const DATA_TYPE = /^data:([\w.+-]+\/[\w.+-]+)(?=[,;])/i
 
-// Логин и пароль в адресах внутри текста: `https://bob:hunter2@host`.
-const TEXT_USERINFO = /\/\/[^\s/?#]*@/g
-// Query и фрагмент: `?` или `#`, приклеенный к адресу. `'` значение не обрывает:
-// во фрагменте браузер оставляет её как есть, а `"` и `` ` `` кодирует.
-const TEXT_QUERY = /(?<=\S)[?#](?=\S)[^\s"`]*/g
-// Слово, после которого в тексте может идти секрет. `auth` -- и в `oauth`
-// и `authorization`, но не в `author`.
+// Адрес внутри текста: от `//` до пробела.
+const TEXT_ADDRESS = /\/\/\S*/g
+// Query и фрагмент. У адреса `?` или `#` уходит со всем значением: `'` браузер не
+// кодирует, и она его не обрывает, а `"` и `` ` `` кодирует. Сам по себе, как
+// `location.hash` в тексте, -- только с `=` или `/`: `issue #42` и `Done?` остаются.
+const TEXT_QUERY = /(?<=\S)[?#](?=\S)[^\s"`]*|(?<!\S)[?#](?=[^\s"`=/]*[=/])[^\s"`]*/g
+// Слово, после которого в тексте может идти секрет. `auth` -- и в `oauth`,
+// `authorization` и `authorisation`, но не в `author`.
 const TELLING_WORD =
-	/(?:passw|passphrase|passcode|pwd|secret|token|auth(?!or(?!iz))|bearer|cookie|session|sessid|csrf|xsrf|jwt|api[\s_-]?key|private[\s_-]?key|credential|signature|otp)[a-z]*/i
+	/(?:passw|passphrase|passcode|pwd|secret|token|auth(?!or(?!i[sz]))|bearer|cookie|session|sessid|csrf|xsrf|jwt|api[\s_-]?key|private[\s_-]?key|credential|signature|otp)[a-z]*/i
 const JWT = /\beyJ[\w-]{7,}(?:\.[\w-]*)*/g
 // Случайная строка в base64, base64url и hex: длинный прогон с цифрой и буквой.
 const TOKEN_RUN = /[\w+/=-]{32,}/g
 
 // Тип ошибки -- имя класса: `TypeError`, `DOMException`, `TokenExpiredError`.
 const ERROR_TYPE = /^[A-Za-z_$][\w$.]{0,59}$/
-// Имя функции во фрейме: `new Foo`, `HTMLButtonElement.<anonymous>`, `Object.foo [as bar]`.
-const NAME = /^(?:(?:async|new) )?[\w$.<>/[\]]+(?: \[as [\w$.]+\])?$/
+// Имя функции во фрейме, как его пишут V8, Firefox и Safari: `new Foo`, `async*load`,
+// `HTMLButtonElement.<anonymous>`, `A.get x [as x]`, `Foo.#bar`, `global code`.
+// Точка и пробел стоят только между частями, поэтому разбор однозначный.
+const NAME =
+	/^(?:(?:async|new) )?(?:[\p{ID_Continue}$#*<>/[\]]+\.)*(?:(?:get|set) )?[\p{ID_Continue}$#*<>/[\]]+(?: \[as [\p{ID_Continue}$#.]+\])?$|^(?:global|eval|module) code$/u
 const NAME_LIMIT = 200
 const METHOD = /^[a-z]{1,16}$/i
 const TAG_KEY = /^[\w.-]{1,32}$/
@@ -71,6 +77,43 @@ function defined(object) {
 
 const pick = (object, keys) => defined(Object.fromEntries(keys.map((key) => [key, object[key]])))
 
+const random = (run) => /\d/.test(run) && /[a-z]/i.test(run)
+
+// JWT или длинная случайная строка, которые в тексте стали бы `[Filtered]`.
+const hasToken = (text) => text.search(JWT) >= 0 || (text.match(TOKEN_RUN) ?? []).some(random)
+
+/**
+ * Хост адреса с логином, паролем и портом: всё после `//` до пути, query или фрагмента.
+ *
+ * @param rest - Адрес без схемы и `//`.
+ */
+function authority(rest) {
+	const end = rest.search(/[/\\?#]/)
+
+	return end < 0 ? rest : rest.slice(0, end)
+}
+
+/**
+ * Адрес без логина и пароля. Сначала уходит всё до последнего `@` хоста, как у
+ * браузера. Если и после этого хост не похож на хост (`deploy:AbC`), его оборвал
+ * `/`, `?` или `#` в пароле раньше `@`, и уходит всё до последнего `@` вообще.
+ *
+ * @param address - Адрес или кусок текста от `//` до пробела.
+ */
+function withoutUserinfo(address) {
+	const start = URL_START.exec(address)?.[0]
+
+	if (!start) return address
+
+	let rest = address.slice(start.length)
+
+	rest = rest.slice(authority(rest).lastIndexOf('@') + 1)
+
+	if (!HOST.test(authority(rest))) rest = rest.slice(rest.lastIndexOf('@') + 1)
+
+	return start + rest
+}
+
 /**
  * Адрес без query и фрагмента, без логина и пароля. От `data:` остаётся тип, от
  * `blob:` -- источник. Путь остаётся как есть: по нему Sentry ищет source maps.
@@ -80,19 +123,34 @@ const pick = (object, keys) => defined(Object.fromEntries(keys.map((key) => [key
 export function cleanUrl(url) {
 	if (typeof url !== 'string') return undefined
 
-	const head = url.slice(0, URL_LIMIT)
+	// Пробелы в начале браузер отбрасывает, и адрес с ними уходит в запрос как обычный.
+	const head = url.slice(0, URL_LIMIT).trimStart()
 
 	if (/^data:/i.test(head)) return `data:${DATA_TYPE.exec(head)?.[1] ?? ''}`
 
-	if (/^blob:/i.test(head)) {
-		const origin = ORIGIN.exec(head.slice(5))
+	if (/^blob:/i.test(head)) return `blob:${ORIGIN.exec(withoutUserinfo(head.slice(5)))?.[0] ?? ''}`
 
-		return origin ? `blob:${origin[1]}${origin[2]}` : 'blob:'
-	}
+	const address = withoutUserinfo(head)
+	const end = address.search(/[?#]/)
 
-	const end = head.search(/[?#]/)
+	return end < 0 ? address : address.slice(0, end)
+}
 
-	return (end < 0 ? head : head.slice(0, end)).replace(URL_START, '$1//')
+/**
+ * Первые 256 символов текста. Слово, которое рассекла граница, уходит целиком: без
+ * конца у адреса нет `@`, по которому срезается пароль, а у длинного токена -- длины,
+ * по которой его узнают.
+ *
+ * @param text - Текст любой длины.
+ */
+function cut(text) {
+	if (text.length <= TEXT_LIMIT) return text
+
+	let end = TEXT_LIMIT - 1
+
+	if (/\S/.test(text[end])) while (end > 0 && /\S/.test(text[end - 1])) end--
+
+	return `${text.slice(0, end)}…`
 }
 
 /**
@@ -106,9 +164,7 @@ export function cleanUrl(url) {
 export function cleanText(text) {
 	if (typeof text !== 'string') return undefined
 
-	let clean = text.length > TEXT_LIMIT ? `${text.slice(0, TEXT_LIMIT - 1)}…` : text
-
-	clean = clean.replace(TEXT_USERINFO, '//').replace(TEXT_QUERY, '')
+	let clean = cut(text).replace(TEXT_ADDRESS, withoutUserinfo).replace(TEXT_QUERY, '')
 
 	const word = TELLING_WORD.exec(clean)
 
@@ -118,13 +174,12 @@ export function cleanText(text) {
 		if (end < clean.length) clean = `${clean.slice(0, end)} ${FILTERED}`
 	}
 
-	return clean
-		.replace(JWT, FILTERED)
-		.replace(TOKEN_RUN, (run) => (/\d/.test(run) && /[a-z]/i.test(run) ? FILTERED : run))
+	return clean.replace(JWT, FILTERED).replace(TOKEN_RUN, (run) => (random(run) ? FILTERED : run))
 }
 
+// Имя функции бывает и из данных: V8 берёт его из вычисляемого ключа объекта.
 const cleanName = (name) =>
-	typeof name === 'string' && name.length <= NAME_LIMIT && NAME.test(name) ? name : undefined
+	typeof name === 'string' && name.length <= NAME_LIMIT && NAME.test(name) && !hasToken(name) ? name : undefined
 
 /**
  * Фрейм стека: файл, функция и место в коде. Строк исходника и переменных нет.
@@ -150,7 +205,7 @@ const cleanFrame = (frame) =>
  */
 const cleanException = ({ type, value, mechanism, stacktrace }) =>
 	defined({
-		type: typeof type === 'string' && ERROR_TYPE.test(type) ? type : 'Error',
+		type: typeof type === 'string' && ERROR_TYPE.test(type) && !hasToken(type) ? type : 'Error',
 		value: cleanText(value),
 		mechanism: mechanism && pick(mechanism, MECHANISM_KEYS),
 		stacktrace: stacktrace?.frames && { frames: stacktrace.frames.map(cleanFrame).filter(Boolean) },
@@ -221,20 +276,29 @@ export function cleanBreadcrumb(breadcrumb) {
  * `beforeSend`: собирает событие заново из разрешённых полей. Уходят тип, текст
  * и стек ошибки, сообщение, крошки, адрес страницы с `User-Agent` и `Referer`,
  * трасса, теги и debug ID файлов для source maps. `extra` с брошенным объектом,
- * пользователь, отпечаток и всё, чего нет в списке, остаются на странице.
+ * пользователь, отпечаток, вложения и всё, чего нет в списке, остаются на странице.
  *
  * @param event - Событие Sentry перед отправкой.
+ * @param hint - Подсказка к событию. Вложения из scope SDK берёт из неё уже после
+ *   `beforeSend`, в обход события, поэтому их приходится убирать здесь.
  */
-export const scrubEvent = (event) =>
-	defined({
-		...pick(event, EVENT_KEYS),
-		transaction: cleanUrl(event.transaction),
-		message: cleanText(event.message),
-		logentry: event.logentry && defined({ message: cleanText(event.logentry.message) }),
-		exception: event.exception?.values && { values: event.exception.values.map(cleanException) },
-		breadcrumbs: event.breadcrumbs?.map(cleanBreadcrumb).filter(Boolean),
-		request: event.request && cleanRequest(event.request),
-		contexts: event.contexts?.trace && { trace: pick(event.contexts.trace, TRACE_KEYS) },
-		tags: event.tags && cleanTags(event.tags),
-		debug_meta: event.debug_meta?.images && { images: event.debug_meta.images.map(cleanImage).filter(Boolean) },
-	}) ?? null
+export function scrubEvent(event, hint) {
+	if (hint) delete hint.attachments
+
+	return (
+		defined({
+			...pick(event, EVENT_KEYS),
+			transaction: cleanUrl(event.transaction),
+			message: cleanText(event.message),
+			logentry: event.logentry && defined({ message: cleanText(event.logentry.message) }),
+			exception: event.exception?.values && { values: event.exception.values.map(cleanException) },
+			breadcrumbs: event.breadcrumbs?.map(cleanBreadcrumb).filter(Boolean),
+			request: event.request && cleanRequest(event.request),
+			contexts: event.contexts?.trace && { trace: pick(event.contexts.trace, TRACE_KEYS) },
+			tags: event.tags && cleanTags(event.tags),
+			debug_meta: event.debug_meta?.images && {
+				images: event.debug_meta.images.map(cleanImage).filter(Boolean),
+			},
+		}) ?? null
+	)
+}
