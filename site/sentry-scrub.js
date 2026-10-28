@@ -25,6 +25,9 @@ const SCHEME = /^[a-z][\w+.-]*:/i
 const SPECIAL = /^(?:https?|wss?|ftp|file):$/i
 const SLASHES = /^[/\\]*/
 const HOST_END = /[/\\?#]/
+// У остальных схем (`postgres:`, `redis:`, `mongodb+srv:`) `\` -- обычный символ
+// логина или пароля, и хост он не обрывает.
+const OPAQUE_HOST_END = /[/?#]/
 // Хост, каким он бывает у сайта: имя с точкой, `localhost`, IPv4 или IPv6 в скобках,
 // и порт до пяти цифр. Логин с паролем, оборванный `/`, `?` или `#` в пароле
 // (`deploy:2024`, `ci`), так не выглядит.
@@ -56,8 +59,13 @@ const TOKEN_RUN = /[\w+/=%-]{32,}/g
 // Файл, который браузер пишет в стек: адрес http(s), расширения или `blob:` без
 // пробелов и кавычек, а у встроенных функций `<anonymous>` или `native`. Строки текста
 // ошибки V8 тоже кладёт в стек, и SDK разбирает их как фреймы, а такие не похожи.
+// Firefox дописывает к файлу кода из `new Function` и вставленных скриптов
+// ` line 3 > Function`, а Safari прячет адреса расширений за `webkit-masked-url://hidden/`.
 const FRAME_ADDRESS =
-	/^(?:(?:blob:)?https?:\/\/[^/\s"'`<>\\]+|[a-z-]+-extension:\/\/[^/\s"'`<>\\]*)(?:\/[\w.~!$&()*+,;=:@%[\]/-]*)?$|^blob:$/i
+	/^(?:(?:blob:)?https?:\/\/[^/\s"'`<>\\]+|[a-z-]+-extension:\/\/[^/\s"'`<>\\]*)(?:\/[\w.~!$&()*+,;=:@%[\]/-]*)?(?: line \d{1,9} > (?:Function|injectedScript|eval))*$|^blob:$/i
+// Хоста у него нет, и `cleanUrl` оставил бы одну схему, а по этому адресу Sentry
+// узнаёт ошибки расширений Safari.
+const MASKED = 'webkit-masked-url://hidden/'
 const BUILTIN_FILE = /^(?:<anonymous>|native|\[native code\])$/
 // Тип ошибки -- имя класса: `TypeError`, `DOMException`, `TokenExpiredError`.
 const ERROR_TYPE = /^[A-Za-z_$][\w$.]{0,59}$/
@@ -118,8 +126,9 @@ const before = (text, pattern) => {
  * Хост адреса с логином, паролем и портом: всё до пути, query или фрагмента.
  *
  * @param rest - Адрес без схемы и слэшей.
+ * @param special - У схемы `\` -- тоже слэш.
  */
-const authority = (rest) => before(rest, HOST_END)
+const authority = (rest, special = true) => before(rest, special ? HOST_END : OPAQUE_HOST_END)
 
 const isHost = (host) => host.length <= HOST_LIMIT && HOST.test(host)
 
@@ -129,11 +138,12 @@ const isHost = (host) => host.length <= HOST_LIMIT && HOST.test(host)
  * `/`, `?` или `#` в пароле раньше `@`, и хост начинается после последнего `@` вообще.
  *
  * @param rest - Адрес без схемы и слэшей.
+ * @param special - У схемы `\` -- тоже слэш.
  */
-function hostStart(rest) {
-	const start = authority(rest).lastIndexOf('@') + 1
+function hostStart(rest, special) {
+	const start = authority(rest, special).lastIndexOf('@') + 1
 
-	return isHost(authority(rest.slice(start))) ? start : rest.lastIndexOf('@') + 1
+	return isHost(authority(rest.slice(start), special)) ? start : rest.lastIndexOf('@') + 1
 }
 
 /**
@@ -146,8 +156,9 @@ function address(head) {
 	const scheme = SCHEME.exec(head)?.[0] ?? ''
 	let rest = head.slice(scheme.length)
 	let slashes = SLASHES.exec(rest)[0]
+	const special = !scheme || SPECIAL.test(scheme)
 
-	if (scheme && !SPECIAL.test(scheme)) {
+	if (!special) {
 		// У других схем хост бывает только после `//`: от `about:` и `mailto:` остаётся схема.
 		if (!rest.startsWith('//')) return scheme.toLowerCase()
 
@@ -156,12 +167,13 @@ function address(head) {
 		return before(head, /[?#]/)
 	}
 
-	rest = rest.slice(slashes.length).replaceAll('\\', '/')
-	rest = rest.slice(hostStart(rest))
+	rest = rest.slice(slashes.length)
+	if (special) rest = rest.replaceAll('\\', '/')
+	rest = rest.slice(hostStart(rest, special))
 
 	const prefix = `${scheme.toLowerCase()}//`
 
-	return isHost(authority(rest)) ? prefix + before(rest, /[?#]/) : prefix
+	return isHost(authority(rest, special)) ? prefix + before(rest, /[?#]/) : prefix
 }
 
 /**
@@ -223,6 +235,8 @@ function withoutUserinfo(text, more) {
 		if (match.index < Math.max(done, seen)) continue
 
 		const from = match.index + match[0].length
+		// Адрес без схемы читается от адреса страницы, а у неё схема `http(s)`.
+		const special = !SCHEME.test(match[0]) || SPECIAL.test(SCHEME.exec(match[0])[0])
 
 		if (from > wordEnd) {
 			const word = before(text.slice(from), /\s/)
@@ -231,7 +245,7 @@ function withoutUserinfo(text, more) {
 			wordAt = from + word.lastIndexOf('@')
 		}
 
-		const host = authority(text.slice(from, wordEnd))
+		const host = authority(text.slice(from, wordEnd), special)
 		const at = host.lastIndexOf('@')
 		let start = from + at + 1
 
@@ -250,7 +264,8 @@ function withoutUserinfo(text, more) {
 
 				// Без `:` это логин, а не пароль, и браузер считает его логином, только
 				// если до `@` нет пути: `http://intranet/x, ask ann@host` остаётся.
-				const userinfo = host.includes(':') || !HOST_END.test(text.slice(from, nextAt))
+				const userinfo =
+					host.includes(':') || !(special ? HOST_END : OPAQUE_HOST_END).test(text.slice(from, nextAt))
 
 				if (userinfo && nextAt < text.length) {
 					start = nextAt + before(text.slice(nextAt), /\s/).lastIndexOf('@') + 1
@@ -302,7 +317,10 @@ const cleanName = (name) =>
 	typeof name === 'string' && name.length <= NAME_LIMIT && NAME.test(name) && !hasToken(name) ? name : undefined
 
 // Адрес скрипта в стеке всегда со строкой, а встроенная функция бывает и без неё.
-const isFrameFile = (file, lineno) => BUILTIN_FILE.test(file) || (lineno !== undefined && FRAME_ADDRESS.test(file))
+const isFrameFile = (file, lineno) =>
+	BUILTIN_FILE.test(file) || (lineno !== undefined && (file === MASKED || FRAME_ADDRESS.test(file)))
+
+const frameFile = (file) => (file === MASKED ? file : cleanUrl(file))
 
 /**
  * Фрейм стека: файл, функция и место в коде. Строк исходника и переменных нет.
@@ -312,8 +330,8 @@ const isFrameFile = (file, lineno) => BUILTIN_FILE.test(file) || (lineno !== und
  * @param frame - Фрейм из стектрейса SDK.
  */
 function cleanFrame(frame) {
-	const filename = cleanUrl(frame.filename)
-	const abs_path = cleanUrl(frame.abs_path)
+	const filename = frameFile(frame.filename)
+	const abs_path = frameFile(frame.abs_path)
 	const lineno = integer(frame.lineno)
 
 	if ([filename, abs_path].some((file) => file && !isFrameFile(file, lineno))) return undefined

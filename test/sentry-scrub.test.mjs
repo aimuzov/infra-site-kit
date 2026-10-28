@@ -65,6 +65,11 @@ test('an address loses the user info however the browser reads it', () => {
 		['https:///bob:Hunter2c@api.example.com/v1/me', 'https://api.example.com/v1/me'],
 		['\\\\bob:Hunter2g@api.example.com/v1/me', '//api.example.com/v1/me'],
 		['/\\bob:Hunter2g@api.example.com/v1/me', '//api.example.com/v1/me'],
+		// У других схем `\` -- символ логина или пароля, а не слэш, и хост он не обрывает.
+		['postgres://svc.app:2024\\Qx9!pw@db.example.com/main', 'postgres://db.example.com/main'],
+		['redis://cache.ro:7\\s3cr3t@cache.example.com:6379/0', 'redis://cache.example.com:6379/0'],
+		['mongodb+srv://john.doe\\hunter2@cluster0.example.net/app', 'mongodb+srv://cluster0.example.net/app'],
+		['postgres://app:p\\ss@db.example.com/main', 'postgres://db.example.com/main'],
 		// Табы и переводы строк внутри браузер выкидывает, управляющие символы в начале -- тоже.
 		['https:/\t/bob:Hunter2d@api.example.com/v1/me', 'https://api.example.com/v1/me'],
 		['https://bo\nb:Hunter2d@api.example.com/v1/me', 'https://api.example.com/v1/me'],
@@ -172,6 +177,12 @@ test('addresses in text lose the user info, the query and the fragment', () => {
 		['GET https://ci/bot:hunter2@api.example.com/v1 failed', 'GET https://api.example.com/v1 failed'],
 		['GET https:\\\\bob:Hunter2@api.example.com/v1 failed', 'GET https:\\\\api.example.com/v1 failed'],
 		['GET https:///bob:Hunter2@api.example.com/v1 failed', 'GET https:///api.example.com/v1 failed'],
+		[
+			'connect ECONNREFUSED postgres://svc.app:2024\\Qx9!pw@db.example.com/main failed',
+			'connect ECONNREFUSED postgres://db.example.com/main failed',
+		],
+		['connect mongodb+srv://john.doe\\hunter2@cluster0.example.net', 'connect mongodb+srv://cluster0.example.net'],
+		['connect redis://cache.ro:7\\s3cr3t@cache.example.com:6379', 'connect redis://cache.example.com:6379'],
 		['GET https:bob:Hunter2@api.example.com/v1 failed', 'GET https:api.example.com/v1 failed'],
 		// PHP по умолчанию пишет `/` в JSON как `\/`.
 		[
@@ -505,6 +516,10 @@ test('a frame keeps only a file the browser writes into a stack', () => {
 			{ filename: '[native code]', function: 'forEach' },
 			{ filename: 'chrome-extension://abcdefghijklmnopabcdefghijklmnop/content.js', lineno: 3 },
 			{ filename: 'blob:https://site.example/550e8400-e29b-41d4', lineno: 4 },
+			// Скрипт расширения в Safari и код из `new Function` и вставленного скрипта в Firefox.
+			{ filename: 'webkit-masked-url://hidden/', function: 'f', lineno: 2, colno: 5 },
+			{ filename: 'https://site.example/_astro/a.js line 3 > Function', function: 'anonymous', lineno: 1 },
+			{ filename: 'https://site.example/a.js line 2 > eval line 1 > injectedScript', lineno: 4 },
 			// Так фрейм из `page.evaluate` или `eval` приходит без файла.
 			{ filename: '', function: 'eval', lineno: 5 },
 		]),
@@ -515,6 +530,9 @@ test('a frame keeps only a file the browser writes into a stack', () => {
 			{ filename: '[native code]', function: 'forEach' },
 			{ filename: 'chrome-extension://', lineno: 3 },
 			{ filename: 'blob:https://site.example', lineno: 4 },
+			{ filename: 'webkit-masked-url://hidden/', function: 'f', lineno: 2, colno: 5 },
+			{ filename: 'https://site.example/_astro/a.js line 3 > Function', function: 'anonymous', lineno: 1 },
+			{ filename: 'https://site.example/a.js line 2 > eval line 1 > injectedScript', lineno: 4 },
 			{ filename: '', function: 'eval', lineno: 5 },
 		],
 	)
@@ -658,6 +676,8 @@ test('long and adversarial input is cleaned in linear time', () => {
 		`\u0001${'\t'.repeat(size)}`,
 		`https://a/${'a'.repeat(size)}"`,
 		`blob:${'blob:'.repeat(size / 5)}`,
+		`postgres://${'a.a:1\\'.repeat(size / 6)}`,
+		`https://a.js${' line 1 > Function'.repeat(size / 18)}`,
 		// Имена функций: точки, `get` и `[as` между частями.
 		'a.'.repeat(size / 2),
 		'a.get '.repeat(size / 6),

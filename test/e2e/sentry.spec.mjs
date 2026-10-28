@@ -302,6 +302,31 @@ test('the user info of an address stays out however the browser reads it', async
 	])
 })
 
+test('a password with a backslash stays out of a database address', async ({ page }) => {
+	const bodies = await openStand(page, '/ui/sentry.html')
+
+	await page.evaluate(() => {
+		// У `postgres:` браузер читает `\\` как часть пароля, а не как слэш.
+		const dsn = 'postgres://svc.app:2024\\Qx9!pw@db.example.com/main'
+
+		console.error(`upstream: connect ECONNREFUSED ${dsn}`)
+		setTimeout(() => {
+			throw new Error(`upstream: connect ECONNREFUSED ${dsn}`)
+		})
+	})
+
+	await expect.poll(() => events(bodies).length).toBe(1)
+	expectNoSecrets(bodies, ['Qx9!pw', 'svc.app'])
+
+	const [error] = events(bodies)
+	const clean = 'upstream: connect ECONNREFUSED postgres://db.example.com/main'
+
+	expect(error.exception.values[0].value).toBe(clean)
+	expect(error.breadcrumbs.filter(({ category }) => category === 'console').map(({ message }) => message)).toEqual([
+		clean,
+	])
+})
+
 test('user info with spaces stays out, even when the 256 cut parts it from @', async ({ page }) => {
 	const bodies = await openStand(page, '/ui/sentry.html')
 	const pad = 'Upstream request failed, retrying later. '.repeat(5)
