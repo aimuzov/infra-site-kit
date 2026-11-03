@@ -16,7 +16,7 @@ export function initBackLink() {
 	const links = [...document.querySelectorAll('[data-back]')]
 	const [link] = links
 
-	const fromOutside = () => document.referrer !== '' && new URL(document.referrer).origin !== location.origin
+	const fromOutside = () => document.referrer === '' || new URL(document.referrer).origin !== location.origin
 
 	const plainClick = (event, link) =>
 		!event.defaultPrevented &&
