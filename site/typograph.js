@@ -11,7 +11,7 @@ const initial = /(?<!\p{L})(\p{Lu}\.)\s+(?=\p{Lu})/gu
 const numero = /([№§])\s*(?=\d)/g
 const dash = /(?<=\S)\s+(?=[—·])/g
 const unit = /(?<=\d)\s+(?=[\p{L}₽%°$€])/gu
-const long = /(?<![\p{L}\d+.,#_-])\d{5,}(?![\p{L}\d_-]|\.[\p{L}\d_]|,\d)/gu
+const long = /(?<![\p{L}\d+.,#_/=:-])\d{5,}(?![\p{L}\d_-]|\.[\p{L}\d_]|,\d)/gu
 const phone = /(?:\+7|(?<!\d)8)(?:[\s()-]*\d){10}(?!\d)/g
 
 export function typographText(text, options = {}) {
@@ -52,7 +52,7 @@ const P_SCOPE = /^(?:applet|button|caption|html|table|td|th|marquee|object|templ
 const LI_SCOPE = /^(?:ul|ol|menu|html|template|pre|code|kbd)$/i
 const DL_SCOPE = /^(?:dl|html|template|pre|code|kbd)$/i
 const VOID = /^(?:area|base|br|col|embed|hr|img|input|link|meta|param|source|track|wbr)$/i
-const TAG = /<!--[\s\S]*?-->|<(?:(?:"[^"]*"|'[^']*'|[^'">])*)>/g
+const TAG = /<!--[\s\S]*?-->|<(?:\/?[A-Za-z]|[!?])(?:"[^"]*"|'[^']*'|[^'">])*>/g
 const ATTR = /\s+([^\s=<>/'"]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+)))?/g
 
 export function typographHtml(html, options = {}) {

@@ -135,3 +135,18 @@ test('preserves numeric filenames while grouping sentence-final numbers', () => 
 	}
 	assert.equal(typographText('Цена 12000. Итого 12000, дорого.'), 'Цена 12 000. Итого 12 000, дорого.')
 })
+
+test('does not group numbers inside visible URLs and identifiers', () => {
+	for (const source of ['https://example.com/12345?next=67890', '?id=12345', 'ref:12345']) {
+		assert.equal(typographText(source), source)
+		assert.equal(typographHtml(`<p>${source}</p>`), `<p>${source}</p>`)
+	}
+	assert.equal(typographText('Цена: 12345 ₽'), 'Цена: 12 345 ₽')
+})
+
+test('plain comparisons cannot consume the next protected opening tag', () => {
+	for (const tag of ['pre', 'code', 'kbd']) {
+		const source = `Цена 2 < 3 <${tag}>Я в доме...</${tag}>`
+		assert.equal(typographHtml(`${source}<p>Я в доме...</p>`), `${source}<p>Я в доме…</p>`)
+	}
+})
