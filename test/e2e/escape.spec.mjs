@@ -126,3 +126,66 @@ test('disabled application handler leaves Escape unhandled', async ({ page }) =>
 	expect(prevented).toBe(false)
 	await expect(page).toHaveURL('/about/')
 })
+
+test('anchor skipping stops at the same-origin boundary', async ({ page, baseURL }) => {
+	const external = baseURL.replace('localhost', '127.0.0.1')
+	await page.goto(external + '/')
+	await page.goto('/about/')
+	await page.evaluate(async () => {
+		document.body.insertAdjacentHTML('beforeend', '<a href="/" data-close>Close</a>')
+		history.pushState({}, '', '#anchor')
+		const { initBackLink } = await import('/site/back-link.js')
+		initBackLink()
+	})
+	await page.getByRole('link', { name: 'Close', exact: true }).click()
+	await expect(page).toHaveURL(baseURL + '/')
+})
+
+test('query-only navigation is a previous page state, not an anchor', async ({ page }) => {
+	await page.goto('/about/?view=one')
+	await page.evaluate(async () => {
+		history.pushState({}, '', '?view=two')
+		document.body.insertAdjacentHTML('beforeend', '<a href="/" data-close>Close</a>')
+		const { initBackLink } = await import('/site/back-link.js')
+		initBackLink()
+	})
+	await page.getByRole('link', { name: 'Close', exact: true }).click()
+	await expect(page).toHaveURL('/about/?view=one')
+	await page.waitForTimeout(1700)
+	await expect(page).toHaveURL('/about/?view=one')
+})
+
+test('back and close links leave modified and targeted clicks to the browser', async ({ page }) => {
+	await page.goto('/')
+	await page.getByRole('link', { name: 'About', exact: true }).click()
+	const intercepted = await page.evaluate(async () => {
+		document.body.insertAdjacentHTML('beforeend', '<a href="/" data-back>Back</a><a href="/" data-close>Close</a>')
+		const { initBackLink } = await import('/site/back-link.js')
+		initBackLink()
+		const results = []
+		for (const link of document.querySelectorAll('[data-back], [data-close]')) {
+			for (const options of [
+				{ ctrlKey: true },
+				{ metaKey: true },
+				{ shiftKey: true },
+				{ altKey: true },
+				{ button: 1 },
+				{ target: '_blank' },
+			]) {
+				link.target = options.target || ''
+				document.addEventListener(
+					'click',
+					(event) => {
+						results.push(event.defaultPrevented)
+						event.preventDefault()
+					},
+					{ once: true },
+				)
+				link.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, ...options }))
+			}
+		}
+		return results
+	})
+	expect(intercepted).toEqual(Array(12).fill(false))
+	await expect(page).toHaveURL('/about/')
+})

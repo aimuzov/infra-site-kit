@@ -18,9 +18,20 @@ export function initBackLink() {
 
 	const fromOutside = () => document.referrer !== '' && new URL(document.referrer).origin !== location.origin
 
+	const plainClick = (event, link) =>
+		!event.defaultPrevented &&
+		event.button === 0 &&
+		!event.ctrlKey &&
+		!event.metaKey &&
+		!event.shiftKey &&
+		!event.altKey &&
+		(!link.target || link.target === '_self') &&
+		!link.hasAttribute('download')
+
 	for (const back of links)
 		back.addEventListener('click', (event) => {
-			if (document.referrer && !fromOutside() && history.length > 1) goBack(event, back.href)
+			if (plainClick(event, back) && document.referrer && !fromOutside() && hasPrevious())
+				goBack(event, back.href)
 		})
 
 	// Navigation API видит только записи своего сайта: есть предыдущая -- назад к нам.
@@ -32,15 +43,23 @@ export function initBackLink() {
 	// шаг назад, если есть куда, даже без referrer. Иначе -- обычный переход
 	for (const close of document.querySelectorAll('[data-close]'))
 		close.addEventListener('click', (event) => {
-			if (hasPrevious()) goBack(event, close.href)
+			if (plainClick(event, close) && hasPrevious()) goBack(event, close.href)
 		})
 
 	function goBack(event, href) {
 		event.preventDefault()
 
-		const path = location.pathname
+		const path = location.pathname + location.search
+		const samePage = () => location.pathname + location.search === path
 		let left = false
-		const skipOwn = () => location.pathname === path && history.back()
+		const skipOwn = () => {
+			if (!samePage()) return
+			if (window.navigation?.currentEntry?.index > 0) history.back()
+			else {
+				removeEventListener('popstate', skipOwn)
+				location.assign(href)
+			}
+		}
 
 		addEventListener('pagehide', () => (left = true), { once: true })
 		addEventListener('popstate', skipOwn)
@@ -49,7 +68,7 @@ export function initBackLink() {
 		setTimeout(() => {
 			removeEventListener('popstate', skipOwn)
 
-			if (!left && location.pathname === path) location.assign(href)
+			if (!left && samePage()) location.assign(href)
 		}, 1500)
 	}
 
