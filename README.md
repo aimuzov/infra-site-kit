@@ -621,3 +621,25 @@ Use `enabled: () => signedIn` for an application guard and `ignoreEditable: fals
 `initBackLink()` from `@aimuzov/infra-site-kit/back-link.js` connects `[data-back]` and `[data-close]` links and Escape. It preserves native link fallback, skips same-path anchor entries, and falls back to the link after 1500 ms if navigation has not left the page. It returns cleanup for the Escape listener; initialize it once per document.
 
 Without the Navigation API, additional anchor traversal uses the link fallback because the origin of the next history entry cannot be verified.
+
+### Typography, titles and SEO
+
+`typographText` and `typographHtml` come from `@aimuzov/infra-site-kit/typograph.js`. They join short Russian words, numbers and units. HTML processing preserves attributes, code, keyboard notation and other languages. Options: `thousandsSeparator`, `preserveLineBreaks`, `language`.
+
+`typographMiddleware(options)` from `typograph-middleware.js` processes HTML responses and removes stale content-length. It keeps the response status and other headers.
+
+`pageTitle(title, { siteName, homeTitle?, separator?, omitSameName? })` from `title.js` shares title formatting while sites keep their naming rules. `seo.astro` takes title, description and siteName; canonical, url, image, locale, type and robots are optional. Separate url preserves Open Graph URLs on noindex pages. Missing optional tags stay absent.
+
+### PostCSS
+
+```js
+import postcss from '@aimuzov/infra-site-kit/postcss'
+
+export default postcss()
+```
+
+The factory creates a fresh globalData, customMedia and nested chain. Use `{ mediaFile: 'frontend/styles/media.css' }` in a workspace with a different source path. The plugins ship with the kit.
+
+### Tooltip interactions
+
+`watchTooltip` and `positionTooltip` come from `tooltip.js`. The controller shares pointer, keyboard, mutation and cleanup handling; the app supplies its content and show/hide callbacks. Optional asynchronous prepare receives an AbortSignal so cancelled content cannot reappear. The renderer keeps its own ARIA semantics, popover and appearance. The returned function removes listeners, observers and timers.
