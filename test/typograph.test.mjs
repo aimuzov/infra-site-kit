@@ -110,3 +110,21 @@ test('implied paragraph and definition-item ends reset language in the right sco
 		'<dl><dd lang="en">English...<dl><dt>Я в доме...</dl><dd>Я в доме…</dl>',
 	)
 })
+
+test('groups long numbers before sentence punctuation without changing decimals or identifiers', () => {
+	assert.equal(typographText('Цена 12000. 12000, дорого'), 'Цена 12 000. 12 000, дорого')
+	for (const number of ['12000.5', '12000,5', '1.12000', '1,12000', 'abc12000', '12000abc', '#12000', '+12000']) {
+		assert.equal(typographText(number), number)
+	}
+})
+
+test('raw-element comparisons and apostrophes cannot consume later tags', () => {
+	for (const name of ['script', 'style', 'textarea']) {
+		const raw = `<${name}>if (i < n) { /* don't */ }</${name}>`
+		const protectedHtml = `<div title='Я в доме...'><pre>Я в доме...</pre><code>Я в доме...</code><span lang="en">Я в доме...</span></div>`
+		const source = `${raw}${protectedHtml}<p>don't</p><p>Я в доме...</p>`
+		const result = typographHtml(source)
+		assert.equal(result, `${raw}${protectedHtml}<p>don't</p><p>Я в доме…</p>`)
+		assert.equal(typographHtml(result), result)
+	}
+})

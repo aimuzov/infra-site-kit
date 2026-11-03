@@ -11,6 +11,7 @@ async function setup(page, options = {}) {
 	)
 	await page.goto('http://tooltip.test')
 	await page.addScriptTag({ type: 'module', content: source + '\nwindow.watchTooltip = watchTooltip' })
+	await page.waitForFunction(() => typeof window.watchTooltip === 'function')
 	await page.evaluate((options) => {
 		const tip = document.querySelector('output')
 		window.shows = 0

@@ -11,7 +11,7 @@ const initial = /(?<!\p{L})(\p{Lu}\.)\s+(?=\p{Lu})/gu
 const numero = /([№§])\s*(?=\d)/g
 const dash = /(?<=\S)\s+(?=[—·])/g
 const unit = /(?<=\d)\s+(?=[\p{L}₽%°$€])/gu
-const long = /(?<![\p{L}\d+.,#_-])\d{5,}(?![\p{L}\d.,_-])/gu
+const long = /(?<![\p{L}\d+.,#_-])\d{5,}(?![\p{L}\d_-]|[.,]\d)/gu
 const phone = /(?:\+7|(?<!\d)8)(?:[\s()-]*\d){10}(?!\d)/g
 
 export function typographText(text, options = {}) {
@@ -60,8 +60,8 @@ export function typographHtml(html, options = {}) {
 	const stack = []
 	const parts = []
 	let last = 0
-	for (const match of html.matchAll(TAG)) {
-		if (match.index < last) continue
+	const tags = new RegExp(TAG.source, 'g')
+	for (let match; (match = tags.exec(html));) {
 		const protectedText = stack.some((entry) => entry.protected)
 		parts.push({ value: html.slice(last, match.index), text: true, protected: protectedText })
 		const tag = match[0]
@@ -77,6 +77,7 @@ export function typographHtml(html, options = {}) {
 			close.lastIndex = match.index + tag.length
 			const end = close.exec(html)
 			last = end ? end.index + end[0].length : html.length
+			tags.lastIndex = last
 			parts.push({
 				value: html.slice(match.index, last),
 				inlineOpen: INLINE.test(name),
