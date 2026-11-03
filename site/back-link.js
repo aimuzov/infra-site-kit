@@ -1,0 +1,57 @@
+import { watchEscape } from './escape.js'
+
+/**
+ * Стрелка «Назад» в шапке лонгрида (`[data-back]`, ссылка на главную) и маленький заголовок
+ * рядом с ней. Пришли со страницы сайта -- возвращают туда же, с её прокруткой; иначе
+ * срабатывают как обычная ссылка.
+ *
+ * Сноски и якоря меняют хеш и кладут записи в историю той же страницы: одного шага назад
+ * мало, их пропускаем. Если за полторы секунды страница так и не ушла (истории сайта нет),
+ * уходим по ссылке.
+ *
+ * Esc делает то же, что стрелка, как на сцене главной. Открытую подсказку он сначала закрывает,
+ * а в поле ввода не трогает.
+ */
+export function initBackLink() {
+	const links = [...document.querySelectorAll('[data-back]')]
+	const [link] = links
+
+	const fromOutside = () => document.referrer !== '' && new URL(document.referrer).origin !== location.origin
+
+	for (const back of links)
+		back.addEventListener('click', (event) => {
+			if (document.referrer && !fromOutside() && history.length > 1) goBack(event, back.href)
+		})
+
+	// Navigation API видит только записи своего сайта: есть предыдущая -- назад к нам.
+	// Без него судим по истории вкладки, она помнит и чужие сайты
+	const hasPrevious = () =>
+		'navigation' in window ? navigation.currentEntry.index > 0 : !fromOutside() && history.length > 1
+
+	// Ссылка, которая закрывает экран (`[data-close]`, "в статье" у самопроверки):
+	// шаг назад, если есть куда, даже без referrer. Иначе -- обычный переход
+	for (const close of document.querySelectorAll('[data-close]'))
+		close.addEventListener('click', (event) => {
+			if (hasPrevious()) goBack(event, close.href)
+		})
+
+	function goBack(event, href) {
+		event.preventDefault()
+
+		const path = location.pathname
+		let left = false
+		const skipOwn = () => location.pathname === path && history.back()
+
+		addEventListener('pagehide', () => (left = true), { once: true })
+		addEventListener('popstate', skipOwn)
+		history.back()
+
+		setTimeout(() => {
+			removeEventListener('popstate', skipOwn)
+
+			if (!left && location.pathname === path) location.assign(href)
+		}, 1500)
+	}
+
+	return watchEscape(() => link.click(), { enabled: () => Boolean(link) })
+}

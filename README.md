@@ -601,3 +601,21 @@ The version in `package.json` goes up in a `chore: release 4.x.y` commit before 
 ## License
 
 [MIT](LICENSE)
+
+### Escape and back navigation
+
+`watchEscape(back, options)` returns a cleanup function. It ignores handled events, held keys, modifiers, IME input and editable fields. Native dialogs and auto popovers close first. Registered temporary layers close from the inside out, one per Escape.
+
+```js
+import { escapeClose, goBack, watchEscape } from '@aimuzov/infra-site-kit/escape.js'
+
+const stop = watchEscape(() => goBack('/'))
+const layer = escapeClose(panel, closePanel)
+// On teardown: stop(); layer.destroy()
+```
+
+Use `enabled: () => signedIn` for an application guard and `ignoreEditable: false` when Escape should also close application panels from a field. `overlaySelector` defaults to open dialogs and auto popovers. A router can supply its own back callback.
+
+`goBack(fallback = '/')` uses previous same-origin history when available. Otherwise it replaces the current entry with the fallback, so Escape cannot bounce between a direct-entry page and its fallback.
+
+`initBackLink()` from `@aimuzov/infra-site-kit/back-link.js` connects `[data-back]` and `[data-close]` links and Escape. It preserves native link fallback, skips same-path anchor entries, and falls back to the link after 1500 ms if navigation has not left the page. It returns cleanup for the Escape listener; initialize it once per document.

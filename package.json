@@ -85,6 +85,14 @@
 			"types": "./site/ui/*.svelte.d.ts",
 			"svelte": "./site/ui/*.svelte",
 			"default": "./site/ui/*.svelte"
+		},
+		"./escape.js": {
+			"types": "./site/escape.d.ts",
+			"default": "./site/escape.js"
+		},
+		"./back-link.js": {
+			"types": "./site/back-link.d.ts",
+			"default": "./site/back-link.js"
 		}
 	},
 	"bin": {
