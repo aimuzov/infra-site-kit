@@ -227,3 +227,25 @@ test('unsupported overlay selectors preserve native dialogs and Escape navigatio
 	await expect(page).toHaveURL('/')
 	expect(errors).toEqual([])
 })
+
+test('an empty referrer cannot send close links outside the site without Navigation API', async ({ page, baseURL }) => {
+	const external = baseURL.replace('localhost', '127.0.0.1')
+	await page.goto(external + '/')
+	await page.evaluate((url) => {
+		const link = document.createElement('a')
+		link.href = url
+		link.referrerPolicy = 'no-referrer'
+		document.body.append(link)
+		link.click()
+	}, baseURL + '/about/')
+	await expect(page).toHaveURL('/about/')
+	expect(await page.evaluate(() => document.referrer)).toBe('')
+	await page.evaluate(async () => {
+		delete window.navigation
+		document.body.insertAdjacentHTML('beforeend', '<a href="/" data-close>Close</a>')
+		const { initBackLink } = await import('/site/back-link.js')
+		initBackLink()
+	})
+	await page.getByRole('link', { name: 'Close', exact: true }).click()
+	await expect(page).toHaveURL(baseURL + '/')
+})
