@@ -127,19 +127,25 @@ test('disabled application handler leaves Escape unhandled', async ({ page }) =>
 	await expect(page).toHaveURL('/about/')
 })
 
-test('anchor skipping stops at the same-origin boundary', async ({ page, baseURL }) => {
-	const external = baseURL.replace('localhost', '127.0.0.1')
-	await page.goto(external + '/')
-	await page.goto('/about/')
-	await page.evaluate(async () => {
-		document.body.insertAdjacentHTML('beforeend', '<a href="/" data-close>Close</a>')
-		history.pushState({}, '', '#anchor')
-		const { initBackLink } = await import('/site/back-link.js')
-		initBackLink()
+for (const navigationAPI of [true, false]) {
+	test(`anchor skipping stops at the same-origin boundary (Navigation API: ${navigationAPI})`, async ({
+		page,
+		baseURL,
+	}) => {
+		const external = baseURL.replace('localhost', '127.0.0.1')
+		await page.goto(external + '/')
+		await page.goto('/about/')
+		await page.evaluate(async (navigationAPI) => {
+			if (!navigationAPI) delete window.navigation
+			document.body.insertAdjacentHTML('beforeend', '<a href="/" data-close>Close</a>')
+			history.pushState({}, '', '#anchor')
+			const { initBackLink } = await import('/site/back-link.js')
+			initBackLink()
+		}, navigationAPI)
+		await page.getByRole('link', { name: 'Close', exact: true }).click()
+		await expect(page).toHaveURL(baseURL + '/')
 	})
-	await page.getByRole('link', { name: 'Close', exact: true }).click()
-	await expect(page).toHaveURL(baseURL + '/')
-})
+}
 
 test('query-only navigation is a previous page state, not an anchor', async ({ page }) => {
 	await page.goto('/about/?view=one')
@@ -203,4 +209,21 @@ test('a completed back traversal does not cancel a quick Forward navigation', as
 	await page.goForward()
 	await page.waitForTimeout(1700)
 	await expect(page).toHaveURL('/about/?view=two')
+})
+
+test('unsupported overlay selectors preserve native dialogs and Escape navigation', async ({ page }) => {
+	const errors = []
+	page.on('pageerror', (error) => errors.push(error.message))
+	await page.goto('/about/')
+	await install(page, { overlaySelector: ':unsupported-overlay-selector' })
+	await page.evaluate(() => {
+		document.body.insertAdjacentHTML('beforeend', '<dialog>Dialog</dialog>')
+		document.querySelector('dialog').showModal()
+	})
+	await page.keyboard.press('Escape')
+	await expect(page.locator('dialog')).not.toBeVisible()
+	await expect(page).toHaveURL('/about/')
+	await page.keyboard.press('Escape')
+	await expect(page).toHaveURL('/')
+	expect(errors).toEqual([])
 })

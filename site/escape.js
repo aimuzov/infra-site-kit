@@ -46,7 +46,13 @@ export function watchEscape(
 			!enabled()
 		)
 			return
-		if (document.querySelector(overlaySelector)) return
+		let overlay
+		try {
+			overlay = document.querySelector(overlaySelector)
+		} catch {
+			overlay = document.querySelector('dialog[open]')
+		}
+		if (overlay) return
 		const target = event.composedPath()[0]
 		if (
 			ignoreEditable &&

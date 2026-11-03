@@ -619,3 +619,5 @@ Use `enabled: () => signedIn` for an application guard and `ignoreEditable: fals
 `goBack(fallback = '/')` uses previous same-origin history when available. Otherwise it replaces the current entry with the fallback, so Escape cannot bounce between a direct-entry page and its fallback.
 
 `initBackLink()` from `@aimuzov/infra-site-kit/back-link.js` connects `[data-back]` and `[data-close]` links and Escape. It preserves native link fallback, skips same-path anchor entries, and falls back to the link after 1500 ms if navigation has not left the page. It returns cleanup for the Escape listener; initialize it once per document.
+
+Without the Navigation API, additional anchor traversal uses the link fallback because the origin of the next history entry cannot be verified.
