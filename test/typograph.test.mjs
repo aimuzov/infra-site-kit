@@ -128,3 +128,10 @@ test('raw-element comparisons and apostrophes cannot consume later tags', () => 
 		assert.equal(typographHtml(result), result)
 	}
 })
+
+test('preserves numeric filenames while grouping sentence-final numbers', () => {
+	for (const filename of ['12000.pdf', '12000.PDF', '12000.tar.gz', '12000.файл', '12000.7z']) {
+		assert.equal(typographText(filename), filename)
+	}
+	assert.equal(typographText('Цена 12000. Итого 12000, дорого.'), 'Цена 12 000. Итого 12 000, дорого.')
+})
