@@ -1,0 +1,26 @@
+---
+type Props = {
+	title: string
+	description: string
+	siteName: string
+	canonical?: string | URL
+	url?: string | URL
+	image?: string | URL
+	locale?: string
+	type?: string
+	robots?: string
+}
+const { title, description, siteName, canonical, url = canonical, image, locale, type, robots } = Astro.props
+---
+
+<title>{title}</title>
+<meta name="description" content={description} />
+{canonical && <link rel="canonical" href={canonical} />}
+{robots && <meta name="robots" content={robots} />}
+{type && <meta property="og:type" content={type} />}
+<meta property="og:site_name" content={siteName} />
+{locale && <meta property="og:locale" content={locale} />}
+{url && <meta property="og:url" content={url} />}
+<meta property="og:title" content={title} />
+<meta property="og:description" content={description} />
+{image && <meta property="og:image" content={image} />}

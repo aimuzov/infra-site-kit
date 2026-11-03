@@ -620,3 +620,25 @@ const layer = escapeClose(panel, closePanel)
 `initBackLink()` из `@aimuzov/infra-site-kit/back-link.js` подключает ссылки `[data-back]`, `[data-close]` и Escape. Пропускает записи якорей той же страницы, при отсутствии перехода за 1500 мс открывает адрес ссылки. Возвращает отписку от Escape; вызывается один раз на документ.
 
 Без Navigation API дальнейший возврат через якоря использует адрес ссылки: проверить, что следующая запись истории принадлежит сайту, невозможно.
+
+### Типограф, заголовки и SEO
+
+`typographText` и `typographHtml` из `@aimuzov/infra-site-kit/typograph.js` связывают короткие русские слова, числа и единицы. HTML-обработка сохраняет атрибуты, код, клавиши и чужие языки. Опции: `thousandsSeparator`, `preserveLineBreaks`, `language`.
+
+`typographMiddleware(options)` из `typograph-middleware.js` обрабатывает HTML-ответы и убирает устаревший content-length, сохраняя статус и остальные заголовки.
+
+`pageTitle(title, { siteName, homeTitle?, separator?, omitSameName? })` из `title.js` объединяет форматирование заголовка с правилами названия сайта. `seo.astro` принимает title, description и siteName; canonical, url, image, locale, type и robots необязательны. Отдельный url сохраняет Open Graph URL у noindex-страниц. Отсутствующие метаданные не добавляются.
+
+### PostCSS
+
+```js
+import postcss from '@aimuzov/infra-site-kit/postcss'
+
+export default postcss()
+```
+
+Фабрика создаёт новую цепочку globalData, customMedia и nested. Для другого пути в воркспейсе передайте `{ mediaFile: 'frontend/styles/media.css' }`. Плагины входят в зависимости kit.
+
+### Подсказки
+
+`watchTooltip` и `positionTooltip` из `tooltip.js` объединяют события мыши и клавиатуры, наблюдение за текстом и очистку ресурсов. Приложение передаёт содержимое и функции показа/закрытия. Асинхронный prepare получает AbortSignal, чтобы отменённая подсказка не появилась снова. Рендерер сохраняет собственные ARIA, popover и оформление. Возвращённая функция снимает слушатели, наблюдатели и таймеры.
