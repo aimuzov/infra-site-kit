@@ -51,25 +51,29 @@ export function initBackLink() {
 
 		const path = location.pathname + location.search
 		const samePage = () => location.pathname + location.search === path
-		let left = false
+		let timer
+		const stop = () => {
+			clearTimeout(timer)
+			removeEventListener('popstate', skipOwn)
+			removeEventListener('pagehide', stop)
+		}
 		const skipOwn = () => {
-			if (!samePage()) return
+			if (!samePage()) return stop()
 			if (window.navigation?.currentEntry?.index > 0) history.back()
 			else {
-				removeEventListener('popstate', skipOwn)
+				stop()
 				location.assign(href)
 			}
 		}
 
-		addEventListener('pagehide', () => (left = true), { once: true })
+		addEventListener('pagehide', stop, { once: true })
 		addEventListener('popstate', skipOwn)
-		history.back()
+		timer = setTimeout(() => {
+			stop()
 
-		setTimeout(() => {
-			removeEventListener('popstate', skipOwn)
-
-			if (!left && samePage()) location.assign(href)
+			if (samePage()) location.assign(href)
 		}, 1500)
+		history.back()
 	}
 
 	return watchEscape(() => link.click(), { enabled: () => Boolean(link) })

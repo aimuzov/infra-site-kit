@@ -189,3 +189,18 @@ test('back and close links leave modified and targeted clicks to the browser', a
 	expect(intercepted).toEqual(Array(12).fill(false))
 	await expect(page).toHaveURL('/about/')
 })
+
+test('a completed back traversal does not cancel a quick Forward navigation', async ({ page }) => {
+	await page.goto('/about/?view=one')
+	await page.evaluate(async () => {
+		history.pushState({}, '', '?view=two')
+		document.body.insertAdjacentHTML('beforeend', '<a href="/" data-close>Close</a>')
+		const { initBackLink } = await import('/site/back-link.js')
+		initBackLink()
+	})
+	await page.getByRole('link', { name: 'Close', exact: true }).click()
+	await expect(page).toHaveURL('/about/?view=one')
+	await page.goForward()
+	await page.waitForTimeout(1700)
+	await expect(page).toHaveURL('/about/?view=two')
+})
