@@ -11,31 +11,59 @@ on:
 
 permissions:
   contents: read
+  actions: read
+  id-token: write
 
 jobs:
   check:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
+      - name: Reuse verified CI
+        id: verified
+        uses: aimuzov/infra-ci/reuse-check@v1
+        continue-on-error: true
+        with:
+          workflow: .github/workflows/check.yml
       - uses: actions/checkout@v5
+        if: steps.verified.outputs.reused != 'true'
       - uses: actions/setup-node@v5
         with:
           node-version: 26
           cache: npm
+        if: steps.verified.outputs.reused != 'true'
       - run: npm ci
+        if: steps.verified.outputs.reused != 'true'
       - run: npm run format:check
+        if: steps.verified.outputs.reused != 'true'
       - run: npm run check
+        if: steps.verified.outputs.reused != 'true'
       - run: npm test
+        if: steps.verified.outputs.reused != 'true'
       # Браузер кэшируем по версии Playwright.
       - id: playwright
-        run: echo "version=$(npm ls @playwright/test --json | jq -r '.dependencies["@playwright/test"].version')" >> "$GITHUB_OUTPUT"
+        run: echo "version=$(npm ls @playwright/test --json | jq -r '.dependencies["@playwright/test"].version')" >>
+          "$GITHUB_OUTPUT"
+        if: steps.verified.outputs.reused != 'true'
       - uses: actions/cache@v4
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+        if: steps.verified.outputs.reused != 'true'
       - run: npx playwright install chromium
+        if: steps.verified.outputs.reused != 'true'
       # Библиотеки Chromium в образе ubuntu-latest уже есть. `--with-deps` тянул из apt
       # ещё шрифты и обновления, и медленное зеркало растягивало это больше чем на 10 минут.
       # Теперь apt нужен, только если браузер не запускается.
-      - run: node -e "require('@playwright/test').chromium.launch().then((browser) => browser.close())" || npx playwright install-deps chromium
+      - run:
+          node -e "require('@playwright/test').chromium.launch().then((browser) => browser.close())" || npx playwright
+          install-deps chromium
+        if: steps.verified.outputs.reused != 'true'
       - run: npm run test:e2e
+        if: steps.verified.outputs.reused != 'true'
+      - name: Record verified CI
+        if: github.event_name == 'pull_request' && steps.verified.outputs.reused != 'true'
+        uses: aimuzov/infra-ci/record-check@v1
+        continue-on-error: true
+        with:
+          workflow: .github/workflows/check.yml
