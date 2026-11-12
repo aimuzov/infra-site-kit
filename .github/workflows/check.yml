@@ -42,8 +42,7 @@ jobs:
         if: steps.verified.outputs.reused != 'true'
       # Браузер кэшируем по версии Playwright.
       - id: playwright
-        run:
-          echo "version=$(npm ls @playwright/test --json | jq -r '.dependencies["@playwright/test"].version')" >>
+        run: echo "version=$(npm ls @playwright/test --json | jq -r '.dependencies["@playwright/test"].version')" >>
           "$GITHUB_OUTPUT"
         if: steps.verified.outputs.reused != 'true'
       - uses: actions/cache@v4
